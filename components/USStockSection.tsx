@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { USStockPosition } from '../types';
 import { TianJiCard } from './TianJiCard';
-import { DollarSign, Trash2, Plus, Edit2, Save, X, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { DollarSign, Trash2, Plus, Edit2, Save, X, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
+import { getUSStockPrices } from '../services/yahooFinanceService';
 
 interface USStockSectionProps {
     positions: USStockPosition[];
@@ -23,6 +24,9 @@ export const USStockSection: React.FC<USStockSectionProps> = ({ positions, setPo
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<Partial<USStockPosition>>({});
 
+    // 更新價格狀態
+    const [isUpdating, setIsUpdating] = useState(false);
+
     // 計算欄位
     const calcFields = (cost: number, price: number, shares: number) => {
         const marketValue = price * shares;
@@ -31,11 +35,53 @@ export const USStockSection: React.FC<USStockSectionProps> = ({ positions, setPo
         return { marketValue, pnl, pnlPercent };
     };
 
-    const handleAddStock = () => {
-        if (!newStock.symbol || !newStock.price || !newStock.shares) return;
+    // 一鍵更新所有美股價格
+    const updateAllPrices = async () => {
+        if (positions.length === 0) return;
 
-        const cost = Number(newStock.costPrice) || Number(newStock.price);
-        const price = Number(newStock.price);
+        setIsUpdating(true);
+        try {
+            const symbols = positions.map(p => p.symbol);
+            const prices = await getUSStockPrices(symbols);
+
+            let updatedCount = 0;
+            setPositions(positions.map(p => {
+                const newPrice = prices[p.symbol];
+                if (newPrice) {
+                    updatedCount++;
+                    const { marketValue, pnl, pnlPercent } = calcFields(p.costPrice, newPrice, p.shares);
+                    return { ...p, price: newPrice, marketValue, pnl, pnlPercent };
+                }
+                return p;
+            }));
+
+            console.log(`✅ 已更新 ${updatedCount}/${symbols.length} 檔美股價格`);
+        } catch (error) {
+            console.error('更新美股價格失敗:', error);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const handleAddStock = async () => {
+        if (!newStock.symbol || !newStock.shares) return;
+
+        let price = Number(newStock.price);
+
+        // 如果沒輸入現價，嘗試自動取得
+        if (!price) {
+            setIsUpdating(true);
+            const prices = await getUSStockPrices([newStock.symbol]);
+            price = prices[newStock.symbol.toUpperCase()] || 0;
+            setIsUpdating(false);
+        }
+
+        if (!price) {
+            alert('無法取得價格，請手動輸入');
+            return;
+        }
+
+        const cost = Number(newStock.costPrice) || price;
         const shares = Number(newStock.shares);
         const { marketValue, pnl, pnlPercent } = calcFields(cost, price, shares);
 
@@ -95,6 +141,16 @@ export const USStockSection: React.FC<USStockSectionProps> = ({ positions, setPo
             title="美股 (US Stock)"
             icon={<DollarSign size={20} />}
             accentColor="green"
+            headerRight={
+                <button
+                    onClick={updateAllPrices}
+                    disabled={isUpdating || positions.length === 0}
+                    className="flex items-center gap-1 text-xs bg-green-700 hover:bg-green-600 disabled:bg-gray-700 px-2 py-1 rounded transition-colors"
+                >
+                    <RefreshCw size={12} className={isUpdating ? 'animate-spin' : ''} />
+                    {isUpdating ? '更新中...' : '更新價格'}
+                </button>
+            }
         >
             {/* Summary */}
             <div className="grid grid-cols-3 gap-4 mb-4 text-center">

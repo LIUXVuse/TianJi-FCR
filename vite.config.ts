@@ -24,6 +24,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/max/, ''),
         },
+        '/api/yahoo': {
+          target: 'https://query1.finance.yahoo.com/v8/finance/chart',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/yahoo/, ''),
+        },
       },
     },
     plugins: [react()],
