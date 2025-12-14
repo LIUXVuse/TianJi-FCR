@@ -19,6 +19,20 @@ interface GlobalSettings {
   
   /** 手頭持有的台幣現金 (TWD) */
   cashTwd: number;
+  
+  /** 手頭持有的美金現金 (USD) 🆕 */
+  cashUsd: number;
+  
+  // --- 原始本金 (用於計算真實總獲利) 🆕 ---
+  
+  /** 原始台幣本金 */
+  originalCapitalTwd: number;
+  
+  /** 原始美金本金 (USD) */
+  originalCapitalUsd: number;
+  
+  /** 原始 USDT 本金 */
+  originalCapitalUsdt: number;
 }
 ```
 
@@ -84,6 +98,17 @@ interface USStockPosition {
   
   /** 持有股數 (可小數，支援零股) */
   shares: number;
+  
+  // --- Margin 槓桿 (美股 Reg T 規則: 最高借50%) 🆕 ---
+  
+  /** 是否使用 Margin */
+  isMargin: boolean;
+  
+  /** 借款比例 (0-50%) */
+  marginRatio: number;
+  
+  /** 借款金額 (USD) */
+  loanAmount: number;
   
   // --- 計算欄位 ---
   
@@ -301,7 +326,7 @@ interface CalculationBreakdown {
 
 **槓桿計算公式：**
 
-```
+```text
 真實槓桿 = 總曝險 ÷ 淨值
 
 其中：
@@ -475,5 +500,153 @@ proxy: {
   '/api/deepseek': { target: 'https://api.deepseek.com' },
   '/api/twse': { target: 'https://mis.twse.com.tw' },
   '/api/max': { target: 'https://max-api.maicoin.com' },
+  '/api/binance': { target: 'https://api.binance.com' },
+  '/api/yahoo': { 
+    target: 'https://query1.finance.yahoo.com/v8/finance/chart',
+    headers: { 'User-Agent': 'Mozilla/5.0' }
+  },
 }
 ```
+
+---
+
+## 12. 外部 API 服務 🆕
+
+### 12.1 USD/TWD 匯率 API
+
+- **服務檔案**: `services/exchangeRateService.ts`
+- **API**: [ExchangeRate-API](https://open.er-api.com/v6/latest/USD)
+- **需要 API Key**: ❌ 不需要
+- **更新頻率**: 每日更新
+- **速率限制**: 無明確限制
+
+```typescript
+import { getUsdTwdRate } from './services/exchangeRateService';
+
+const rate = await getUsdTwdRate(); // 回傳 number | null
+```
+
+### 12.2 美股報價 API
+
+- **服務檔案**: `services/yahooFinanceService.ts`
+- **API**: Yahoo Finance (非官方)
+- **需要 API Key**: ❌ 不需要
+- **透過 Vite Proxy**: `/api/yahoo/{symbol}`
+
+```typescript
+import { getUSStockPrice, getUSStockPrices } from './services/yahooFinanceService';
+
+const price = await getUSStockPrice('AAPL');
+const prices = await getUSStockPrices(['AAPL', 'NVDA', 'TSLA']);
+```
+
+---
+
+## 13. 新增計算指標 🆕
+
+### 13.1 資金運用率
+
+衡量某資產類別佔可用資金的比例。
+
+```typescript
+// 台股運用率
+stockUtilization = stockMarketValue / (cashTwd + stockMarketValue)
+
+// 美股運用率
+usStockUtilization = usStockMarketValue / (cashUsd + usStockMarketValue)
+
+// 幣圈運用率
+cryptoUtilization = cryptoPositionSize / (walletBalance + cryptoPositionSize)
+```
+
+### 13.2 真實總獲利
+
+```typescript
+// 原始本金 (換算 TWD)
+originalCapitalTotal = originalCapitalTwd 
+                     + (originalCapitalUsd * usdTwdRate) 
+                     + (originalCapitalUsdt * usdtTwdRate)
+
+// 真實總獲利
+totalProfit = netWorth - originalCapitalTotal
+profitPercent = (totalProfit / originalCapitalTotal) * 100
+```
+
+---
+
+## 14. 每日快照 (DailySnapshot) 🆕
+
+用於記錄每日資產狀態，支援歷史走勢追蹤。
+
+### 快照規則
+
+| 規則 | 說明 |
+|------|------|
+| **ID 格式** | `YYYY-MM-DD-HH:mm:ss`（當天）或 `YYYY-MM-DD`（歷史） |
+| **每日上限** | 最多 5 筆，超過會刪除最舊 |
+| **隔天清理** | 只保留最新一筆，ID 簡化為 `YYYY-MM-DD` |
+
+```typescript
+interface DailySnapshot {
+  id: string;           // YYYY-MM-DD-HH:mm:ss 或 YYYY-MM-DD
+  timestamp: number;    // Unix timestamp
+  netWorth: number;     // 總淨值 (TWD)
+  grossAssets: number;  // 總資產
+  totalDebt: number;    // 總負債
+  
+  // 各類資產明細
+  stockValue: number;   // 台股市值
+  usStockValue: number; // 美股市值 (TWD)
+  cryptoValue: number;  // 幣圈市值 (TWD)
+  cashTwd: number;
+  cashUsd: number;
+  
+  // 獲利追蹤
+  totalPnl: number;
+  pnlPercent: number;
+  
+  // 槓桿與運用率
+  realLeverage: number;
+  stockUtilization: number;
+  usStockUtilization: number;
+  cryptoUtilization: number;
+}
+```
+
+---
+
+## 15. 目標 (Goal) 🆕
+
+```typescript
+interface Goal {
+  id: string;
+  name: string;         // 如: "第一桶金"
+  targetAmount: number; // 目標金額 (TWD)
+  deadline?: string;
+  createdAt: string;
+  achievedAt?: string;
+}
+```
+
+---
+
+## 16. 歷史服務 (historyService.ts) 🆕
+
+| 函數 | 說明 |
+|------|------|
+| `saveSnapshot(snapshot)` | 儲存快照（每日最多 5 筆） |
+| `getSnapshots()` | 取得所有快照 |
+| `shouldTakeSnapshot()` | 檢查是否需要快照 (4PM-9AM) |
+| `getWaveAnalysis()` | 波段分析 (高低點、位置) |
+| `cleanupOldSnapshots()` | 清理過去日期的多餘快照 |
+| `getGoals()` / `addGoal()` / `deleteGoal()` | 目標管理 |
+
+---
+
+## 17. localStorage Keys 🆕
+
+| Key | 用途 | 生命週期 |
+|-----|------|----------|
+| `tianji_history_v1` | 快照、目標資料 | 永久 |
+| `tianji_goalLines` | 目標線開關狀態 | Session |
+| `tianji_timeRange` | 時間區間設定 | Session |

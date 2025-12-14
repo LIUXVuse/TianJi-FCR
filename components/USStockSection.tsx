@@ -83,6 +83,7 @@ export const USStockSection: React.FC<USStockSectionProps> = ({ positions, setPo
 
         const cost = Number(newStock.costPrice) || price;
         const shares = Number(newStock.shares);
+        const loanAmount = Number((newStock as any).loanAmount) || 0;
         const { marketValue, pnl, pnlPercent } = calcFields(cost, price, shares);
 
         const stock: USStockPosition = {
@@ -92,6 +93,9 @@ export const USStockSection: React.FC<USStockSectionProps> = ({ positions, setPo
             costPrice: cost,
             price: price,
             shares: shares,
+            isMargin: loanAmount > 0,
+            marginRatio: loanAmount > 0 ? (loanAmount / (cost * shares)) * 100 : 0,
+            loanAmount: loanAmount,
             marketValue,
             pnl,
             pnlPercent,
@@ -181,7 +185,7 @@ export const USStockSection: React.FC<USStockSectionProps> = ({ positions, setPo
                     <div key={stock.id} className="bg-gray-800 rounded-lg p-3 flex items-center gap-3">
                         {editingId === stock.id ? (
                             // Edit Mode
-                            <div className="flex-1 grid grid-cols-5 gap-2">
+                            <div className="flex-1 grid grid-cols-6 gap-2">
                                 <input
                                     type="text"
                                     value={editForm.symbol || ''}
@@ -211,6 +215,13 @@ export const USStockSection: React.FC<USStockSectionProps> = ({ positions, setPo
                                     placeholder="股數"
                                     step="0.01"
                                 />
+                                <input
+                                    type="number"
+                                    value={editForm.loanAmount || 0}
+                                    onChange={e => setEditForm({ ...editForm, loanAmount: Number(e.target.value) })}
+                                    className="bg-gray-700 rounded px-2 py-1 text-sm text-yellow-400"
+                                    placeholder="Margin借款"
+                                />
                                 <div className="flex gap-1">
                                     <button onClick={saveEdit} className="bg-green-600 hover:bg-green-500 text-white p-1 rounded">
                                         <Save size={16} />
@@ -227,13 +238,19 @@ export const USStockSection: React.FC<USStockSectionProps> = ({ positions, setPo
                                     <div className="flex items-center gap-2">
                                         <span className="font-bold text-green-400">{stock.symbol}</span>
                                         <span className="text-xs text-gray-400">{stock.name}</span>
+                                        {(stock.loanAmount || 0) > 0 && (
+                                            <span className="text-xs bg-yellow-600 text-white px-1 rounded">Margin</span>
+                                        )}
                                     </div>
-                                    <div className="text-xs text-gray-400 flex gap-3 mt-1">
+                                    <div className="text-xs text-gray-400 flex gap-3 mt-1 flex-wrap">
                                         <span>成本 ${stock.costPrice}</span>
                                         <span>→</span>
                                         <span>現價 ${stock.price}</span>
                                         <span>×</span>
                                         <span>{stock.shares} 股</span>
+                                        {(stock.loanAmount || 0) > 0 && (
+                                            <span className="text-yellow-400">借 ${stock.loanAmount}</span>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="text-right">
@@ -291,6 +308,13 @@ export const USStockSection: React.FC<USStockSectionProps> = ({ positions, setPo
                         placeholder="股數"
                         step="0.01"
                         className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-green-500 outline-none"
+                    />
+                    <input
+                        type="number"
+                        value={(newStock as any).loanAmount || ''}
+                        onChange={e => setNewStock({ ...newStock, loanAmount: Number(e.target.value) } as any)}
+                        placeholder="Margin借款"
+                        className="bg-gray-700 border border-yellow-600 rounded px-2 py-1 text-sm text-yellow-400 focus:border-yellow-500 outline-none"
                     />
                     <button
                         onClick={handleAddStock}

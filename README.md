@@ -80,13 +80,15 @@ npm run dev
 - ✅ **證交所即時報價**：盤中即時價，盤後收盤價
 - ✅ **一鍵更新**：批次更新所有持股現價
 
-### 3. 美股模組 (USD) 🆕
+### 3. 美股模組 (USD)
 
 - ✅ 支援美股部位管理
 - ✅ 自動匯率換算 (USD → TWD)
 - ✅ 損益追蹤
-- ⚠️ **Yahoo Finance 即時報價** (尚未測試)
-- ⚠️ **一鍵更新價格** (尚未測試)
+- ✅ **Margin 槓桿**：支援輸入借款金額 🆕
+- ✅ **美金現金部位**：獨立管理 🆕
+- ✅ **Yahoo Finance 即時報價**
+- ✅ **一鍵更新價格**
 
 ### 4. 加密貨幣模組 (USDT)
 
@@ -102,10 +104,12 @@ npm run dev
 - ✅ 自動計算總負債
 - ✅ 納入淨值計算
 
-### 6. USDT/TWD 匯率
+### 6. 匯率服務
 
-- ✅ **MAX 交易所即時匯率**
+- ✅ **USDT/TWD**：MAX 交易所即時匯率
+- ✅ **USD/TWD**：ExchangeRate-API 即時匯率 🆕
 - ✅ 手動輸入調整
+- ✅ 一鍵更新匯率按鈕 🆕
 
 ### 7. AI 財務軍師
 
@@ -115,18 +119,50 @@ npm run dev
 - ✅ **問題輸入**：⌘+Enter 送出
 - ✅ **自訂人設**：可輸入個人八字資料
 
-### 8. 八字計算 🆕
+### 8. 八字計算
 
 - ✅ **lunar-javascript 庫**：精確計算
 - ✅ 輸入西曆生辰，自動算出四柱八字
 - ✅ 五行分布統計
 - ✅ 節氣、農曆日期
 
-### 9. 本地資料庫 🆕
+### 9. 本地資料庫
 
 - ✅ **IndexedDB**：穩定可靠
 - ✅ 自動從 localStorage 遷移
 - ✅ 雙寫策略，不易遺失資料
+
+### 10. 原始本金與獲利追蹤 🆕
+
+- ✅ **原始本金輸入**：台幣、美金、USDT 分開紀錄
+- ✅ **真實總獲利計算**：目前淨值 - 原始本金
+- ✅ TWD 換算顯示
+
+### 11. 資金運用率 🆕
+
+- ✅ **台股運用率**：市值 / (現金 + 市值)
+- ✅ **美股運用率**：市值 / (美金現金 + 市值)
+- ✅ **幣圈運用率**：倉位 / (閒置U + 倉位)
+- ✅ hover 顯示槓桿 + 運用率
+
+### 12. 歷史紀錄頁面 🆕
+
+- ✅ **淨值走勢圖**：AreaChart + 目標參考線
+- ✅ **X 軸縮放**：Brush 拖曳選擇時間區段
+- ✅ **目標線視覺化**：背景漸層填充 + 動態 Y 軸
+- ✅ **每日快照**：每日最多 5 筆，隔天保留最新一筆
+- ✅ **目標追蹤**：設定財務目標，追蹤達成進度
+- ✅ **波段分析**：歷史高低點、目前位置百分比
+- ✅ **資產配置**：四宮格餅圖（台股/美股/幣圈/負債）
+- ✅ **設定記憶**：目標線開關、時間區間 localStorage 持久化
+
+### 13. localStorage 儲存 Keys 🆕
+
+| Key | 用途 | 格式 |
+|-----|------|------|
+| `tianji_history_v1` | 快照、目標資料 | JSON |
+| `tianji_goalLines` | 目標線開關狀態 | JSON `{goalId: boolean}` |
+| `tianji_timeRange` | 時間區間設定 | `'7d' \| '1m' \| '3m' \| '1y' \| 'all'` |
 
 ---
 
@@ -141,14 +177,17 @@ tianji-fcr/
 │   ├── USStockSection.tsx   # 美股模組 🆕
 │   ├── CryptoSection.tsx    # 加密貨幣模組
 │   ├── DebtSection.tsx      # 負債模組 🆕
-│   ├── CalculationBreakdown.tsx # 計算明細 🆕
+│   ├── CalculationBreakdown.tsx # 計算明細
+│   ├── HistoryPage.tsx      # 歷史紀錄頁面 🆕
 │   └── TianJiCard.tsx       # 通用卡片元件
 ├── services/
 │   ├── deepseekService.ts   # AI 財務建議
-│   ├── baziService.ts       # 八字計算 🆕
-│   ├── dbService.ts         # IndexedDB 服務 🆕
+│   ├── baziService.ts       # 八字計算
+│   ├── dbService.ts         # IndexedDB 服務
+│   ├── historyService.ts    # 歷史快照與目標 🆕
 │   ├── twseService.ts       # 證交所報價
 │   ├── binanceService.ts    # 幣安價格
+│   ├── exchangeRateService.ts # USD/TWD 匯率 🆕
 │   └── maxService.ts        # MAX 匯率
 ├── vite.config.ts         # Vite 設定 (含 API proxy)
 ├── API_SPEC.md            # API 規格文件

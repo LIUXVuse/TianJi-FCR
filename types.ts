@@ -28,6 +28,11 @@ export interface USStockPosition {
   price: number;       // 現價 (USD)
   shares: number;      // 股數 (可小數，支援零股)
 
+  // --- Margin 槓桿 (美股 Reg T 規則: 最高借50%) ---
+  isMargin: boolean;   // 是否使用 Margin
+  marginRatio: number; // 借款比例 (0-50%)
+  loanAmount: number;  // 借款金額 (USD)
+
   // --- 計算欄位 ---
   marketValue: number; // 市值 = price * shares (USD)
   pnl: number;         // 損益 (USD)
@@ -93,7 +98,13 @@ export interface DebtState {
 export interface GlobalSettings {
   usdtTwdRate: number;  // USDT/TWD 匯率
   usdTwdRate: number;   // USD/TWD 匯率 (美金)
-  cashTwd: number;      // 台幣現金
+  cashTwd: number;      // 台幣現金部位
+  cashUsd: number;      // 美金現金部位 (USD)
+
+  // 原始本金 (用於計算真實總獲利)
+  originalCapitalTwd: number;  // 原始台幣本金
+  originalCapitalUsd: number;  // 原始美金本金
+  originalCapitalUsdt: number; // 原始 USDT 本金
 }
 
 // ==========================================
@@ -106,11 +117,16 @@ export interface AnalysisResult {
   totalDebt: number;     // 總負債
   totalExposure: number; // 總曝險
 
-  // --- 槓桿四兄弟 ---
-  realLeverage: number;    // 1. 總資產槓桿 (曝險/淨值)
-  stockLeverage: number;   // 2. 台股槓桿
-  usStockLeverage: number; // 3. 美股槓桿 (通常為1，除非有融資)
+  // --- 融資槓桿 (有沒有借錢) ---
+  realLeverage: number;    // 1. 真實槓桿 (總曝險/淨值)
+  stockLeverage: number;   // 2. 台股槓桿 (市值/淨權益)
+  usStockLeverage: number; // 3. 美股槓桿
   cryptoLeverage: number;  // 4. 幣圈槓桿
+
+  // --- 資金運用率 (投入多少資金) 🆕 ---
+  stockUtilization: number;   // 台股運用率 (市值 / 台幣現金+市值)
+  usStockUtilization: number; // 美股運用率 (市值 / 美金現金+市值)
+  cryptoUtilization: number;  // 幣圈運用率 (倉位 / 閒置U+倉位)
 
   // --- 台股 ---
   stockMaintenanceRate: number | null;
@@ -132,6 +148,7 @@ export interface AnalysisResult {
 export interface CalculationBreakdown {
   // --- 資產 ---
   cashTwd: number;           // 台幣現金
+  cashUsdTwd: number;        // 美金現金 (換算TWD) 🆕
   stockEquityTwd: number;    // 台股淨權益 (市值 - 融資)
   usStockEquityTwd: number;  // 美股淨值 (換算TWD)
   cryptoEquityTwd: number;   // 幣圈淨值 (換算TWD)
@@ -139,8 +156,9 @@ export interface CalculationBreakdown {
 
   // --- 負債 ---
   stockLoanTwd: number;      // 台股融資金額
+  usStockLoanTwd: number;    // 美股 Margin 借款 (換算TWD) 🆕
   totalDebtTwd: number;      // 信貸+房貸+車貸
-  totalLiabilities: number;  // 總負債 (融資+其他負債)
+  totalLiabilities: number;  // 總負債 (融資+Margin+其他負債)
 
   // --- 曝險 ---
   stockExposureTwd: number;  // 台股曝險 (市值)
@@ -160,4 +178,53 @@ export enum RiskLevel {
   SAFE = 'SAFE',       // 槓桿 < 1.5
   WARNING = 'WARNING', // 槓桿 1.5 - 2.5
   DANGER = 'DANGER',   // 槓桿 > 2.5
+}
+
+// ==========================================
+// 每日快照 (Daily Snapshot)
+// ==========================================
+export interface DailySnapshot {
+  id: string;           // YYYY-MM-DD 格式
+  timestamp: number;    // Unix timestamp
+  netWorth: number;     // 總淨值 (TWD)
+  grossAssets: number;  // 總資產
+  totalDebt: number;    // 總負債
+
+  // 各類資產明細
+  stockValue: number;   // 台股市值
+  usStockValue: number; // 美股市值 (TWD 換算)
+  cryptoValue: number;  // 幣圈市值 (TWD 換算)
+  cashTwd: number;      // 台幣現金
+  cashUsd: number;      // 美金現金
+
+  // 獲利追蹤
+  totalPnl: number;     // 總獲利
+  pnlPercent: number;   // 獲利百分比
+
+  // 槓桿與運用率
+  realLeverage: number;
+  stockUtilization: number;
+  usStockUtilization: number;
+  cryptoUtilization: number;
+}
+
+// ==========================================
+// 目標 (Goal)
+// ==========================================
+export interface Goal {
+  id: string;
+  name: string;         // 目標名稱 (如: "第一桶金")
+  targetAmount: number; // 目標金額 (TWD)
+  deadline?: string;    // 目標日期 (可選)
+  createdAt: string;
+  achievedAt?: string;  // 達成日期
+}
+
+// ==========================================
+// 歷史紀錄狀態 (History State)
+// ==========================================
+export interface HistoryState {
+  snapshots: DailySnapshot[];
+  goals: Goal[];
+  lastSnapshotDate: string; // YYYY-MM-DD
 }
