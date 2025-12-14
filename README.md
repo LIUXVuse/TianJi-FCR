@@ -13,6 +13,19 @@
 - **幣安即時價格**：一鍵更新所有加密貨幣現價
 - **AI 財務軍師**：結合八字命理的專業財務建議
 - **八字自動計算**：輸入生辰自動算出四柱八字
+- **Supabase 雲端同步**：支援跨裝置資料漫遊（含設定、持倉、負債、快照與目標）
+- **歷史淨值追蹤**：自動/手動快照淨值，並繪製趨勢圖與設定財務目標
+
+## 📸 介面截圖
+
+![天機火控雷達主畫面](assets/dashboard.png)
+*主控台：即時資產監控與槓桿分析*
+
+![雲端同步功能](assets/sync.png)
+*雲端同步：Supabase 整合，支援跨裝置還原*
+
+![AI 財務軍師](assets/ai_advisor.hero.webp)
+*AI 軍師：結合八字與財務數據的即時建議*
 
 ---
 
@@ -196,6 +209,82 @@ tianji-fcr/
 
 ---
 
+## ❤️ 支持開發 (Sponsor)
+
+如果您喜歡此作品，覺得它幫助您避開了爆倉風險，或是在交易中獲得了平靜，可以考慮透過以下方式支持持續開發：
+
+| 平台 | 帳號 |
+|------|------|
+| **USDT (TRC20)** | `TExxw25EaPKZdKr9uPJT8MLV2zHrQBbhQg` |
+| **X Payments** | `liupony2000.x` |
+
+您的支持將用於伺服器維護與 AI token 消耗，非常感謝！🙏
+
+---
+
+## 🛠️ 開發與設定
+
+### 12. **歷史紀錄頁面**
+
+    - 點擊 Tab 切換至「歷史紀錄」頁面
+    - 查看淨值趨勢圖與資產分佈
+    - 設定財務目標（Goal Line）
+    - 管理每日快照（系統每日自動保留一筆，可手動快照）
+
+### 13. **雲端同步 (Supabase)**
+
+    - **上傳 (☁️↑)**：將本地端所有資料上傳至雲端資料庫
+      - 包含：全域設定、未實現損益、台美股持倉、幣圈合約/現貨、負債、歷史快照、財務目標
+    - **下載 (☁️↓)**：從雲端下載資料覆蓋本地端
+      - 適用情境：更換瀏覽器、跨裝置使用、或資料救援
+    - **狀態指示**：
+      - 灰色：閒置
+      - 綠色：同步成功
+      - 紅色：同步失敗 (請檢查 Console 或環境變數)
+
+---
+
+## ☁️ Supabase 雲端同步設定 (Setup Guide)
+
+若要啟用雲端同步功能，請依照以下步驟設定您的個人 Supabase資料庫（免費）：
+
+### 步驟 1：建立 Supabase 專案
+
+1. 前往 [Supabase 官網](https://supabase.com/) 並註冊/登入。
+2. 點擊 **"New Project"** 建立一個新專案。
+3. 記下專案的密碼 (Database Password)。
+
+### 步驟 2：取得 API Key 與 URL
+
+1. 專案建立完成後，進入 Project Dashboard。
+2. 前往 **Project Settings** (左下角齒輪圖示) > **API**。
+3. 找到 **Project URL** 與 **anon / public Key**。
+
+### 步驟 3：設定環境變數
+
+1. 在專案根目錄建立 `.env.local` 檔案（如果不存的話）。
+2. 填入以下內容，並替換為步驟 2 取得的數值：
+
+```bash
+VITE_SUPABASE_URL=https://你的專案ID.supabase.co
+VITE_SUPABASE_ANON_KEY=你的_anon_key
+```
+
+### 步驟 4：初始化資料庫
+
+1. 在 Supabase Dashboard 左側選單點擊 **SQL Editor**。
+2. 點擊 **New Query**。
+3. 複製本專案中的 `supabase_setup.sql` 檔案內容，貼上並執行 (Run)。
+    > 檔案位置：`/supabase_setup.sql`
+4. 若看到 "Success" 訊息，代表資料表建立完成。
+
+### 步驟 5：重啟應用程式
+
+1. 在終端機執行 `npm run dev` 重啟服務。
+2. 介面右上角出現雲端圖示即代表功能啟用。
+
+---
+
 ## 🔧 API 服務
 
 | 服務 | 來源 | 費用 | 說明 |
@@ -255,4 +344,4 @@ tianji-fcr/
 
 ---
 
-*Powered by DeepSeek AI & lunar-javascript*
+*Powered by LIU PIN HSIAO如果您喜歡此作品，可以考慮透過以下方式支持持續開發：USDT (TRC20) TExxw25EaPKZdKr9uPJT8MLV2zHrQBbhQgX Payments liupony2000.x*

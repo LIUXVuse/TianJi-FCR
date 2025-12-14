@@ -6,15 +6,28 @@ import { DebtSection } from './components/DebtSection';
 import { CalculationBreakdown } from './components/CalculationBreakdown';
 import { HistoryPage } from './components/HistoryPage';
 import { StockPosition, CryptoState, GlobalSettings, AnalysisResult, USStockPosition, DebtItem, DailySnapshot } from './types';
-import { Settings, ShieldAlert, BadgeDollarSign, Activity, TrendingUp, Bitcoin, Info, RefreshCw, MessageSquare, X, Calendar, DollarSign, CreditCard, BarChart3, Camera } from 'lucide-react';
+import { Settings, ShieldAlert, BadgeDollarSign, Activity, TrendingUp, Bitcoin, Info, RefreshCw, MessageSquare, X, Calendar, DollarSign, CreditCard, BarChart3, Camera, Cloud, CloudOff } from 'lucide-react';
 import { getTianJiAdvice, DEFAULT_PERSONA, getCustomPersona, saveCustomPersona } from './services/deepseekService';
 import { getUsdtTwdRate } from './services/maxService';
 import { getUsdTwdRate } from './services/exchangeRateService';
-import { saveSnapshot, shouldTakeSnapshot, getTodayString } from './services/historyService';
+import { saveSnapshot, shouldTakeSnapshot, getTodayString, getHistory, saveHistory } from './services/historyService';
 import { calculateBaZi, getBirthInfo, saveBirthInfo, BirthInfo, BaZiResult } from './services/baziService';
 import { extractStockCode, getStockPrice } from './services/twseService';
 import { getUSStockPrices } from './services/yahooFinanceService';
 import { getPrice as getCryptoPrice } from './services/binanceService';
+import {
+  loadAllFromCloud,
+  saveAllToCloud,
+  testConnection,
+  saveSettingsToCloud,
+  saveStockPositionsToCloud,
+  saveUSStockPositionsToCloud,
+  saveCryptoPositionsToCloud,
+  saveDebtsToCloud,
+  saveSnapshotsToCloud,
+  saveGoalsToCloud,
+  CloudData
+} from './services/supabaseService';
 
 const STORAGE_KEY_V1 = 'tianji_data_v1';
 const STORAGE_KEY_V2 = 'tianji_data_v2';
@@ -202,8 +215,15 @@ const App: React.FC = () => {
   // 頁面切換
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'history'>('dashboard');
 
+  // 歷史紀錄刷新觸發器
+  const [historyLastUpdated, setHistoryLastUpdated] = useState(Date.now());
+
   // 全局刷新狀態
   const [isGlobalRefreshing, setIsGlobalRefreshing] = useState(false);
+
+  // 雲端同步狀態
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState<'idle' | 'synced' | 'error'>('idle');
 
   // AI 設定
   const [showAISettings, setShowAISettings] = useState(false);
@@ -514,6 +534,94 @@ const App: React.FC = () => {
     }
   };
 
+  // --- 雲端同步 ---
+  const handleCloudUpload = async () => {
+    setIsCloudSyncing(true);
+    setCloudStatus('idle');
+    try {
+      console.log('☁️ 開始上傳到雲端...');
+
+      // 取得歷史資料（快照與目標）
+      const history = getHistory();
+
+      // 儲存設定（含 walletBalance）
+      await saveSettingsToCloud(settings, cryptoData.walletBalance);
+
+      // 儲存各類持倉
+      await saveStockPositionsToCloud(stockPositions);
+      await saveUSStockPositionsToCloud(usStockPositions);
+      await saveCryptoPositionsToCloud(cryptoData.positions);
+      await saveDebtsToCloud(debts);
+
+      // 儲存快照與目標
+      await saveSnapshotsToCloud(history.snapshots);
+      await saveGoalsToCloud(history.goals);
+
+      setCloudStatus('synced');
+      console.log('✅ 雲端上傳完成');
+    } catch (error) {
+      console.error('❌ 雲端上傳失敗:', error);
+      setCloudStatus('error');
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
+
+  const handleCloudDownload = async () => {
+    setIsCloudSyncing(true);
+    setCloudStatus('idle');
+    try {
+      console.log('☁️ 開始從雲端下載...');
+      const cloudData = await loadAllFromCloud();
+
+      // 載入設定
+      if (cloudData.settings) {
+        setSettings(cloudData.settings);
+      }
+
+      // 載入 walletBalance
+      if (cloudData.walletBalance > 0) {
+        setCryptoData(prev => ({ ...prev, walletBalance: cloudData.walletBalance }));
+      }
+
+      // 載入持倉
+      if (cloudData.stockPositions.length > 0) {
+        setStockPositions(cloudData.stockPositions);
+      }
+      if (cloudData.usStockPositions.length > 0) {
+        setUSStockPositions(cloudData.usStockPositions);
+      }
+      if (cloudData.cryptoPositions.length > 0) {
+        setCryptoData(prev => ({ ...prev, positions: cloudData.cryptoPositions }));
+      }
+      if (cloudData.debts.length > 0) {
+        setDebts(cloudData.debts);
+      }
+
+      // 載入快照與目標到本地歷史
+      const currentHistory = getHistory();
+      if (cloudData.snapshots.length > 0) {
+        // 合併或覆蓋快照？這裡選擇覆蓋以保持一致
+        currentHistory.snapshots = cloudData.snapshots;
+      }
+      if (cloudData.goals.length > 0) {
+        currentHistory.goals = cloudData.goals;
+      }
+      saveHistory(currentHistory);
+
+      // 觸發歷史頁面刷新
+      setHistoryLastUpdated(Date.now());
+
+      setCloudStatus('synced');
+      console.log('✅ 雲端下載完成');
+    } catch (error) {
+      console.error('❌ 雲端下載失敗:', error);
+      setCloudStatus('error');
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
+
   // --- TianJi Advice Trigger ---
   const askTianJi = useCallback(async () => {
     if (results.netWorth === 0) return;
@@ -565,6 +673,11 @@ const App: React.FC = () => {
     }
   }, [results.realLeverage, results.stockMaintenanceRate, results.netWorth, results.stockLeverage, results.cryptoLeverage]);
 
+  const utilizationResults = {
+    stock: results.stockUtilization,
+    usStock: results.usStockUtilization,
+    crypto: results.cryptoUtilization
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-200 font-sans selection:bg-cyan-500 selection:text-white pb-20">
@@ -621,6 +734,30 @@ const App: React.FC = () => {
               <RefreshCw size={14} className={isGlobalRefreshing ? 'animate-spin' : ''} />
               {isGlobalRefreshing ? '刷新中...' : '刷新全部'}
             </button>
+
+            {/* 雲端同步按鈕組 */}
+            <div className="flex items-center gap-1 bg-gray-800 rounded-full border border-gray-700">
+              <button
+                onClick={handleCloudUpload}
+                disabled={isCloudSyncing}
+                className={`flex items-center gap-1 px-2 py-1 rounded-l-full transition-colors ${cloudStatus === 'synced' ? 'text-emerald-400' : cloudStatus === 'error' ? 'text-red-400' : 'text-gray-400'
+                  } hover:text-white disabled:opacity-50`}
+                title="上傳到雲端"
+              >
+                <Cloud size={14} className={isCloudSyncing ? 'animate-pulse' : ''} />
+                {isCloudSyncing ? '' : '↑'}
+              </button>
+              <div className="w-px h-4 bg-gray-600" />
+              <button
+                onClick={handleCloudDownload}
+                disabled={isCloudSyncing}
+                className="flex items-center gap-1 px-2 py-1 rounded-r-full text-gray-400 hover:text-white disabled:opacity-50 transition-colors"
+                title="從雲端下載"
+              >
+                <CloudOff size={14} className={isCloudSyncing ? 'animate-pulse' : ''} />
+                ↓
+              </button>
+            </div>
           </div>
         </div>
       </nav>
@@ -632,17 +769,14 @@ const App: React.FC = () => {
           <HistoryPage
             currentNetWorth={results.netWorth}
             breakdown={breakdown}
-            utilization={{
-              stock: results.stockUtilization,
-              usStock: results.usStockUtilization,
-              crypto: results.cryptoUtilization
-            }}
+            utilization={utilizationResults}
             stockPositions={stockPositions}
             usStockPositions={usStockPositions}
             cryptoPositions={cryptoData.positions}
             debts={debts}
             cashUsd={settings.cashUsd}
-            usdTwdRate={settings.usdTwdRate || 31.5}
+            usdTwdRate={settings.usdTwdRate}
+            lastUpdated={historyLastUpdated}
           />
         ) : (
           <>
@@ -1109,6 +1243,49 @@ const App: React.FC = () => {
           </>
         )}
       </main>
+
+      {/* 贊助資訊 Footer */}
+      <footer className="max-w-6xl mx-auto px-4 py-8 mb-8 border-t border-gray-800 text-center space-y-4">
+        <p className="text-gray-400 text-sm">
+          如果您喜歡此作品，可以考慮透過以下方式支持持續開發：
+        </p>
+        <div className="flex flex-col md:flex-row justify-center items-center gap-4 text-xs font-mono text-gray-500">
+          <div
+            className="bg-gray-900 px-4 py-2 rounded-lg border border-gray-800 flex items-center gap-2 cursor-pointer hover:bg-gray-800 transition-colors group active:scale-95 transform"
+            onClick={() => {
+              navigator.clipboard.writeText('TExxw25EaPKZdKr9uPJT8MLV2zHrQBbhQg');
+              alert('已複製 USDT 地址！'); // 簡單反饋，或者可以用 toast
+            }}
+            title="點擊複製 USDT 地址"
+          >
+            <span className="text-green-500 font-bold">USDT (TRC20)</span>
+            <span className="group-hover:text-white transition-colors">TExxw25EaPKZdKr9uPJT8MLV2zHrQBbhQg</span>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 text-[10px] ml-1">📋</span>
+          </div>
+          <div
+            className="bg-gray-900 px-4 py-2 rounded-lg border border-gray-800 flex items-center gap-2 cursor-pointer hover:bg-gray-800 transition-colors group active:scale-95 transform"
+            onClick={() => {
+              navigator.clipboard.writeText('liupony2000.x');
+              alert('已複製 X Payments 地址！');
+            }}
+            title="點擊複製 X Payments 地址 (多幣錢包)"
+          >
+            <div className="flex flex-col items-start">
+              <span className="text-blue-400 font-bold flex items-center gap-1">
+                X Payments
+                <span className="text-[10px] text-gray-500 font-normal border border-gray-700 rounded px-1 ml-1">多幣錢包地址</span>
+              </span>
+              <span className="group-hover:text-white transition-colors flex items-center gap-1">
+                liupony2000.x
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 text-[10px]">📋</span>
+              </span>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-gray-600">
+          TianJi-FCR v3.0 &copy; {new Date().getFullYear()}
+        </p>
+      </footer>
     </div>
   );
 }

@@ -53,6 +53,7 @@ interface HistoryPageProps {
     debts?: Array<{ name: string; amount: number }>;
     cashUsd?: number;
     usdTwdRate?: number;
+    lastUpdated?: number; // 用於觸發資料重載
 }
 
 // 餅圖顏色
@@ -67,7 +68,8 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
     cryptoPositions,
     debts,
     cashUsd,
-    usdTwdRate = 31.5
+    usdTwdRate = 31.5,
+    lastUpdated
 }) => {
     const [snapshots, setSnapshots] = useState<DailySnapshot[]>([]);
     const [goals, setGoals] = useState<Goal[]>([]);
@@ -91,12 +93,16 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
     const [expandedSection, setExpandedSection] = useState<'twd' | 'usd' | 'usdt' | 'total' | null>(null);
 
     // 時間區間 - 從 localStorage 讀取
-    const [timeRange, setTimeRange] = useState<'7d' | '1m' | '3m' | '1y' | 'all'>(() => {
+    const [timeRange, setTimeRange] = useState<'7d' | '1m' | '3m' | '1y' | 'all' | 'custom'>(() => {
         try {
             const saved = localStorage.getItem('tianji_timeRange');
-            return (saved as '7d' | '1m' | '3m' | '1y' | 'all') || 'all';
+            return (saved as any) || 'all';
         } catch { return 'all'; }
     });
+
+    // 自訂時間範圍
+    const [customStart, setCustomStart] = useState('');
+    const [customEnd, setCustomEnd] = useState('');
 
     // 標記已載入
     useEffect(() => {
@@ -116,11 +122,12 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
         localStorage.setItem('tianji_timeRange', timeRange);
     }, [timeRange]);
 
+    // 載入資料 (初始化或外部更新時)
     useEffect(() => {
         setSnapshots(getSnapshots());
         setGoals(getGoals());
         setWaveAnalysis(getWaveAnalysis());
-    }, []);
+    }, [lastUpdated]); // 監聽 lastUpdated 變化
 
     // 初始化目標線開關
     useEffect(() => {
@@ -135,16 +142,51 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
 
         const now = new Date();
         const cutoff = new Date();
+        let startTime = 0;
+        let endTime = Infinity;
 
-        switch (timeRange) {
-            case '7d': cutoff.setDate(now.getDate() - 7); break;
-            case '1m': cutoff.setMonth(now.getMonth() - 1); break;
-            case '3m': cutoff.setMonth(now.getMonth() - 3); break;
-            case '1y': cutoff.setFullYear(now.getFullYear() - 1); break;
+        if (timeRange === 'custom') {
+            if (customStart) startTime = new Date(customStart).getTime();
+            if (customEnd) {
+                const end = new Date(customEnd);
+                end.setHours(23, 59, 59, 999); // 包含當天結束
+                endTime = end.getTime();
+            }
+        } else {
+            switch (timeRange) {
+                case '7d': cutoff.setDate(now.getDate() - 7); break;
+                case '1m': cutoff.setMonth(now.getMonth() - 1); break;
+                case '3m': cutoff.setMonth(now.getMonth() - 3); break;
+                case '1y': cutoff.setFullYear(now.getFullYear() - 1); break;
+            }
+            startTime = cutoff.getTime();
         }
 
-        return snapshots.filter(s => new Date(s.id) >= cutoff);
-    }, [snapshots, timeRange]);
+        return snapshots.filter(s => {
+            // 優先使用 timestamp，若無則回退到 id 解析 (兼容舊資料)
+            // 注意：s.id 格式為 YYYY-MM-DD-HH:mm:ss，需轉為標準格式 YYYY-MM-DDTHH:mm:ss
+            let time = s.timestamp;
+            if (!time) {
+                const standardizedId = s.id.replace(/-/g, '/').replace(/(\d{4}\/\d{2}\/\d{2})_(\d{2}:\d{2}:\d{2})/, '$1 $2');
+                // 嘗試多種解析，或直接用字串處理。最簡單是假設格式固定。
+                // 這裡簡單處理：如果是舊資料且無 timestamp，可能會有時區問題，建議依賴 timestamp
+                // 如果是本專案生成的新資料，一定有 timestamp
+                // 若只有 id:
+                try {
+                    // id format: 2024-12-14-15:43:09
+                    // split it
+                    const parts = s.id.split('-');
+                    if (parts.length >= 3) {
+                        const dateStr = parts.slice(0, 3).join('-') + 'T' + parts.slice(3).join(':');
+                        time = new Date(dateStr).getTime();
+                    }
+                } catch (e) { console.error('Date parse error', e); }
+            }
+            if (!time) return true; // 保留無法解析的以防萬一
+
+            return time >= startTime && time <= endTime;
+        });
+    }, [snapshots, timeRange, customStart, customEnd]);
 
     // 格式化圖表資料
     const chartData = filteredSnapshots.map(s => ({
@@ -302,15 +344,34 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                     <span className="text-lg font-bold text-white">淨值走勢</span>
 
                     {/* 時間區間選擇 */}
-                    <div className="flex items-center gap-1 ml-auto bg-gray-800 rounded-full p-1">
-                        {(['7d', '1m', '3m', '1y', 'all'] as const).map(range => (
+                    {/* 自訂時間輸入 */}
+                    {timeRange === 'custom' && (
+                        <div className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 py-1 border border-gray-800">
+                            <input
+                                type="date"
+                                value={customStart}
+                                onChange={(e) => setCustomStart(e.target.value)}
+                                className="bg-gray-800 text-white text-xs rounded px-1 outline-none border border-gray-700 focus:border-emerald-500"
+                            />
+                            <span className="text-gray-500 text-xs">-</span>
+                            <input
+                                type="date"
+                                value={customEnd}
+                                onChange={(e) => setCustomEnd(e.target.value)}
+                                className="bg-gray-800 text-white text-xs rounded px-1 outline-none border border-gray-700 focus:border-emerald-500"
+                            />
+                        </div>
+                    )}
+
+                    <div className="flex bg-gray-900 rounded-lg p-1 border border-gray-800">
+                        {(['7d', '1m', '3m', '1y', 'all', 'custom'] as const).map(range => (
                             <button
                                 key={range}
                                 onClick={() => setTimeRange(range)}
                                 className={`px-2 py-0.5 rounded-full text-xs transition-colors ${timeRange === range ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
                                     }`}
                             >
-                                {range === '7d' ? '7天' : range === '1m' ? '1月' : range === '3m' ? '3月' : range === '1y' ? '1年' : '全部'}
+                                {range === '7d' ? '7天' : range === '1m' ? '1月' : range === '3m' ? '3月' : range === '1y' ? '1年' : range === 'all' ? '全部' : '自訂'}
                             </button>
                         ))}
                     </div>
