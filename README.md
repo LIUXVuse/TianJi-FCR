@@ -15,6 +15,7 @@
 - **八字自動計算**：輸入生辰自動算出四柱八字
 - **Supabase 雲端同步**：支援跨裝置資料漫遊（含設定、持倉、負債、快照與目標）
 - **歷史淨值追蹤**：自動/手動快照淨值，並繪製趨勢圖與設定財務目標
+- **量化回測系統**：整合台股量化分析工具，支援 12 種策略回測 🆕
 
 ## 📸 介面截圖
 
@@ -50,6 +51,26 @@ cd TianJi-FCR
 npm install
 ```
 
+> **⚡ 自動化**：`npm install` 會自動執行 `postinstall` 腳本，建立 Python 虛擬環境並安裝量化系統依賴。
+
+#### 如果自動安裝失敗
+
+若看到「⚠️ 量化系統安裝失敗」訊息，請手動執行：
+
+```bash
+# 方法一：使用 npm 腳本
+npm run setup:quant
+
+# 方法二：手動安裝
+cd tw-quant-simple
+python3 -m venv .venv
+source .venv/bin/activate  # Mac/Linux
+pip install -r requirements.txt
+cd ..
+```
+
+> 💡 **系統需求**：量化功能需要 Python 3.8+，請確認已安裝 Python
+
 ### 步驟 3：設定 API Key
 
 在專案根目錄創建 `.env.local` 檔案：
@@ -70,6 +91,8 @@ npm run dev
 ### 步驟 5：開啟瀏覽器
 
 訪問 <http://localhost:3000>
+
+> 💡 整合版會自動啟動量化後端 (port 8000)，點選導航列「🔬 量化」即可使用
 
 ---
 
@@ -169,6 +192,15 @@ npm run dev
 - ✅ **資產配置**：四宮格餅圖（台股/美股/幣圈/負債）
 - ✅ **設定記憶**：目標線開關、時間區間 localStorage 持久化
 
+### 14. 量化回測系統 🆕
+
+- ✅ **整合 tw-quant-simple**：一鍵啟動前端 + 量化後端
+- ✅ **12 種策略**：MA 均線、RSI、MACD、布林通道、外資跟單等
+- ✅ **個股回測**：自訂時間範圍、分析績效指標
+- ✅ **投資組合回測**：等權重、鑽石手、定期定額策略
+- ✅ **全市場掃描**：2600+ 股票夏普比率排名
+- ✅ **法人籌碼策略**：外資/投信連續買超訊號
+
 ### 13. localStorage 儲存 Keys 🆕
 
 | Key | 用途 | 格式 |
@@ -204,7 +236,11 @@ tianji-fcr/
 │   └── maxService.ts        # MAX 匯率
 ├── vite.config.ts         # Vite 設定 (含 API proxy)
 ├── API_SPEC.md            # API 規格文件
-└── .env.local             # 環境變數 (需自行建立)
+├── .env.local             # 環境變數 (需自行建立)
+└── tw-quant-simple/       # 量化回測系統 (子專案) 🆕
+    ├── web/app.py           # FastAPI 後端
+    ├── backtest/            # 回測引擎與策略
+    └── data/                # 股價與法人資料
 ```
 
 ---
@@ -322,7 +358,16 @@ VITE_SUPABASE_ANON_KEY=你的_anon_key
 
 ## 📝 更新日誌
 
-### v3.0 (2024-12)
+### v3.1 (2025-12) 🆕
+
+- ✨ 整合量化回測系統 (tw-quant-simple)
+- ✨ 新增「量化」標籤頁，一鍵切換
+- ✨ 一個 `npm run dev` 同時啟動前端 + 量化後端
+- ✨ 支援 12 種交易策略回測
+- ✨ 投組回測：等權重、鑽石手、定期定額
+- 🔧 更新 Vite proxy 設定，整合量化 API
+
+### v3.0 (2025-12)
 
 - ✨ 新增美股模組 (USD)
 - ✨ 新增負債管理 (信貸/房貸/車貸)
@@ -333,7 +378,7 @@ VITE_SUPABASE_ANON_KEY=你的_anon_key
 - 🔧 優化 AI 提示詞架構
 - 🔧 修復資料遺失問題
 
-### v2.5 (2024-12)
+### v2.5 (2025-12)
 
 - ✨ 新增 DeepSeek AI 財務軍師
 - ✨ 新增台股即時報價 (證交所 API)

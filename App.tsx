@@ -5,6 +5,7 @@ import { USStockSection } from './components/USStockSection';
 import { DebtSection } from './components/DebtSection';
 import { CalculationBreakdown } from './components/CalculationBreakdown';
 import { HistoryPage } from './components/HistoryPage';
+import { QuantPage } from './components/QuantPage';
 import { StockPosition, CryptoState, GlobalSettings, AnalysisResult, USStockPosition, DebtItem, DailySnapshot } from './types';
 import { Settings, ShieldAlert, BadgeDollarSign, Activity, TrendingUp, Bitcoin, Info, RefreshCw, MessageSquare, X, Calendar, DollarSign, CreditCard, BarChart3, Camera, Cloud, CloudOff } from 'lucide-react';
 import { getTianJiAdvice, DEFAULT_PERSONA, getCustomPersona, saveCustomPersona } from './services/deepseekService';
@@ -213,7 +214,7 @@ const App: React.FC = () => {
   const [isRefreshingRate, setIsRefreshingRate] = useState(false);
 
   // 頁面切換
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'history'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'history' | 'quant'>('dashboard');
 
   // 歷史紀錄刷新觸發器
   const [historyLastUpdated, setHistoryLastUpdated] = useState(Date.now());
@@ -712,6 +713,15 @@ const App: React.FC = () => {
             >
               📈 歷史
             </button>
+            <button
+              onClick={() => setCurrentTab('quant')}
+              className={`px-3 py-1 rounded-full text-sm transition-colors ${currentTab === 'quant'
+                ? 'bg-emerald-600 text-white'
+                : 'text-gray-400 hover:text-white'
+                }`}
+            >
+              🔬 量化
+            </button>
           </div>
 
           <div className="flex items-center gap-2 text-xs md:text-sm">
@@ -778,6 +788,8 @@ const App: React.FC = () => {
             usdTwdRate={settings.usdTwdRate}
             lastUpdated={historyLastUpdated}
           />
+        ) : currentTab === 'quant' ? (
+          <QuantPage />
         ) : (
           <>
             {/* TianJi's Commentary Area */}

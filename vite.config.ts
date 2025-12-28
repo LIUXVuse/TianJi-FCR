@@ -9,6 +9,62 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       host: '0.0.0.0',
       proxy: {
+        // ========== 量化系統 API (tw-quant-simple) ==========
+        '/quant': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/quant/, ''),
+        },
+        // 量化系統 API 路徑 - 直接代理到後端
+        '/api/status': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/backtest': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/portfolio': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/download': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/signals': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/scan': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/optimize': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/tickers': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/scheduler': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/reports': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/api/monitor': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/reports': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        // ========== 天機自用 API ==========
         '/api/deepseek': {
           target: 'https://api.deepseek.com',
           changeOrigin: true,

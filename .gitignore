@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 環境變數
+.env
+.env.local
+.env.*.local
+
+# tw-quant-simple 子專案（已整合，但有自己的 .gitignore）
+tw-quant-simple/.venv/
+tw-quant-simple/data/
+tw-quant-simple/reports/
+tw-quant-simple/__pycache__/
+tw-quant-simple/.cache/

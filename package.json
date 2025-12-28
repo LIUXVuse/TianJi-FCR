@@ -4,7 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "postinstall": "npm run setup:quant || echo '⚠️ 量化系統安裝失敗，請手動執行 npm run setup:quant'",
+    "setup:quant": "cd tw-quant-simple && python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt",
+    "dev": "concurrently -n \"前端,量化\" -c \"cyan,green\" \"vite\" \"cd tw-quant-simple && . .venv/bin/activate && python -m uvicorn web.app:app --host 0.0.0.0 --port 8000\"",
+    "dev:frontend": "vite",
+    "dev:quant": "cd tw-quant-simple && . .venv/bin/activate && python -m uvicorn web.app:app --host 0.0.0.0 --port 8000",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -20,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.2.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
