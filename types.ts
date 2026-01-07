@@ -56,6 +56,7 @@ export interface CryptoPosition {
   // --- 合約專用 ---
   leverage: number; // 槓桿 (現貨固定為1)
   margin: number;   // 本金 (USDT) - 合約用
+  liquidationPrice?: number; // 強平價格 (用戶可選輸入，Cross Margin 需手動填)
 
   // --- 現貨專用 ---
   units: number;    // 顆數 (Units/Coins) - 現貨用 (e.g. 0.5 BTC)

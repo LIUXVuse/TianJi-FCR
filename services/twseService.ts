@@ -63,7 +63,11 @@ export const getStockPrice = async (
 
         const data = await response.json();
 
-        if (!data.msgArray || data.msgArray.length === 0) {
+        const stock = data.msgArray?.[0];
+
+        // 檢查是否有有效資料：msgArray 存在且 stock.c（股票代號）有值
+        // TWSE API 對於上市找不到的股票會回傳 { c: "", z: "-" } 等空資料
+        if (!stock || !stock.c) {
             // 可能是上櫃股票，嘗試 OTC
             if (!isTPEx) {
                 return getStockPrice(stockCode, true);
@@ -71,8 +75,6 @@ export const getStockPrice = async (
             console.error(`找不到股票: ${stockCode}`);
             return null;
         }
-
-        const stock = data.msgArray[0];
 
         // z = 最新成交價, y = 昨日收盤價
         const latestPrice = parseFloat(stock.z) || parseFloat(stock.y) || 0;

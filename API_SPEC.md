@@ -154,6 +154,9 @@ interface CryptoPosition {
   /** 投入本金/保證金 (Margin, USDT) */
   margin: number;
   
+  /** 強平價格 (可選，Cross Margin 建議手動輸入) 🆕 */
+  liquidationPrice?: number;
+  
   // --- 現貨專用 (SPOT) ---
   
   /** 持有顆數 (如: 0.5 BTC) */
@@ -336,6 +339,36 @@ interface CalculationBreakdown {
 槓桿 < 1：有閒置資金
 槓桿 = 1：全額投入
 槓桿 > 1：使用槓桿/借貸
+```
+
+### 7.2 台股融資斷頭計算 🆕
+
+```text
+維持率 = (現價 × 股數) / 融資金額 × 100%
+
+斷頭價 = 融資金額 × 1.30 / 股數
+
+距離斷頭 % = (現價 - 斷頭價) / 現價 × 100%
+
+警示條件：
+- 維持率 < 140% → 變紅
+- 距離斷頭 < 10% → 變紅
+```
+
+### 7.3 幣圈合約爆倉計算 🆕
+
+```text
+// 如果用戶輸入了強平價
+if (liquidationPrice > 0) {
+  距離爆倉 = (現價 - 強平價) / 現價 × 100%
+}
+
+// 否則使用預估公式 (Long)
+預估強平價 = 開倉價 × (1 - 1/槓桿)
+距離爆倉 = (現價 - 預估強平價) / 現價 × 100%
+
+警示條件：
+- 距離爆倉 < 10% → 變紅閃爆
 ```
 
 ---
@@ -650,3 +683,4 @@ interface Goal {
 | `tianji_history_v1` | 快照、目標資料 | 永久 |
 | `tianji_goalLines` | 目標線開關狀態 | Session |
 | `tianji_timeRange` | 時間區間設定 | Session |
+| `tianji_dashboard_order` | 儀表板組件排序 🆕 | 永久 |

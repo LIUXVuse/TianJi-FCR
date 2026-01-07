@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { StockSection } from './components/StockSection';
 import { CryptoSection } from './components/CryptoSection';
 import { USStockSection } from './components/USStockSection';
@@ -6,6 +6,8 @@ import { DebtSection } from './components/DebtSection';
 import { CalculationBreakdown } from './components/CalculationBreakdown';
 import { HistoryPage } from './components/HistoryPage';
 import { QuantPage } from './components/QuantPage';
+import { AllocationChart } from './components/AllocationChart';
+import { DraggableDashboard } from './components/DraggableDashboard';
 import { StockPosition, CryptoState, GlobalSettings, AnalysisResult, USStockPosition, DebtItem, DailySnapshot } from './types';
 import { Settings, ShieldAlert, BadgeDollarSign, Activity, TrendingUp, Bitcoin, Info, RefreshCw, MessageSquare, X, Calendar, DollarSign, CreditCard, BarChart3, Camera, Cloud, CloudOff } from 'lucide-react';
 import { getTianJiAdvice, DEFAULT_PERSONA, getCustomPersona, saveCustomPersona } from './services/deepseekService';
@@ -505,14 +507,41 @@ const App: React.FC = () => {
         console.log('✅ 美股價格已更新');
       }
 
-      // 5. 刷新幣圈價格
+      // 5. 刷新幣圈價格 (需要同時更新 pnl, pnlPercent, positionSize)
       if (cryptoData.positions && cryptoData.positions.length > 0) {
         console.log('₿ 刷新幣圈價格...');
         const updatedPositions = await Promise.all(
           cryptoData.positions.map(async (pos) => {
             const newPrice = await getCryptoPrice(pos.symbol);
             if (newPrice && newPrice > 0) {
-              return { ...pos, currentPrice: newPrice };
+              // 重新計算 PnL (與 CryptoSection 的邏輯一致)
+              const amount = pos.type === 'SPOT' ? pos.units : pos.margin;
+              const leverage = pos.type === 'SPOT' ? 1 : pos.leverage;
+              const entry = pos.entryPrice;
+
+              let pnl = 0;
+              let pnlPercent = 0;
+              let positionSize = 0;
+
+              if (pos.type === 'SPOT') {
+                pnl = (newPrice - entry) * amount;
+                positionSize = amount * newPrice;
+                const costBasis = amount * entry;
+                pnlPercent = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
+              } else {
+                const rawPercent = entry > 0 ? (newPrice - entry) / entry : 0;
+                pnlPercent = rawPercent * leverage * 100;
+                pnl = amount * (pnlPercent / 100);
+                positionSize = amount * leverage;
+              }
+
+              return {
+                ...pos,
+                currentPrice: newPrice,
+                positionSize,
+                pnl,
+                pnlPercent
+              };
             }
             return pos;
           })
@@ -1244,13 +1273,47 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Main Input Sections - 4 columns on desktop */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <StockSection positions={stockPositions} setPositions={setStockPositions} />
-              <USStockSection positions={usStockPositions} setPositions={setUSStockPositions} usdTwdRate={settings.usdTwdRate || 31.5} />
-              <CryptoSection data={cryptoData} setData={setCryptoData} usdtRate={settings.usdtTwdRate} />
-              <DebtSection debts={debts} setDebts={setDebts} />
-            </div>
+            {/* Main Input Sections - Draggable Dashboard */}
+            <DraggableDashboard
+              items={[
+                {
+                  id: 'allocation',
+                  label: '資產配置',
+                  component: (
+                    <AllocationChart
+                      cashTwd={settings.cashTwd}
+                      cashUsd={settings.cashUsd || 0}
+                      cashUsdt={cryptoData.walletBalance}
+                      usdTwdRate={settings.usdTwdRate || 31.5}
+                      usdtTwdRate={settings.usdtTwdRate}
+                      stockPositions={stockPositions}
+                      usStockPositions={usStockPositions}
+                      cryptoPositions={cryptoData.positions || []}
+                    />
+                  ),
+                },
+                {
+                  id: 'stock',
+                  label: '台股部位',
+                  component: <StockSection positions={stockPositions} setPositions={setStockPositions} />,
+                },
+                {
+                  id: 'usstock',
+                  label: '美股部位',
+                  component: <USStockSection positions={usStockPositions} setPositions={setUSStockPositions} usdTwdRate={settings.usdTwdRate || 31.5} />,
+                },
+                {
+                  id: 'crypto',
+                  label: '加密貨幣',
+                  component: <CryptoSection data={cryptoData} setData={setCryptoData} usdtRate={settings.usdtTwdRate} />,
+                },
+                {
+                  id: 'debt',
+                  label: '負債資產',
+                  component: <DebtSection debts={debts} setDebts={setDebts} />,
+                },
+              ]}
+            />
 
           </>
         )}

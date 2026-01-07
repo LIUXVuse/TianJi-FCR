@@ -21,7 +21,29 @@ export const CryptoSection: React.FC<CryptoSectionProps> = ({ data, setData, usd
         units: '',     // For Spot (Coins)
         entryPrice: '',
         currentPrice: '',
+        liquidationPrice: '', // 強平價 (可選，Cross Margin 需手動填)
     });
+
+    // --- 計算爆倉距離 % ---
+    const calculateLiqDistance = (pos: CryptoPosition): number | null => {
+        if (pos.type === 'SPOT') return null; // 現貨無爆倉
+
+        const current = pos.currentPrice;
+        if (current <= 0) return null;
+
+        // 優先使用用戶輸入的強平價
+        if (pos.liquidationPrice && pos.liquidationPrice > 0) {
+            return ((current - pos.liquidationPrice) / current) * 100;
+        }
+
+        // 若無強平價，使用預估公式: Entry * (1 - 1/Leverage)
+        const entry = pos.entryPrice;
+        const lev = pos.leverage;
+        if (entry <= 0 || lev <= 1) return null;
+
+        const estLiqPrice = entry * (1 - 1 / lev);
+        return ((current - estLiqPrice) / current) * 100;
+    };
 
     // --- Editing State ---
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -113,6 +135,7 @@ export const CryptoSection: React.FC<CryptoSectionProps> = ({ data, setData, usd
             currentPrice: current,
             margin: type === 'FUTURE' ? amount : 0, // Store margin only for Future
             units: type === 'SPOT' ? amount : 0,    // Store units only for Spot
+            liquidationPrice: type === 'FUTURE' && newPos.liquidationPrice ? Number(newPos.liquidationPrice) : undefined,
             positionSize: size,
             pnl,
             pnlPercent
@@ -123,7 +146,7 @@ export const CryptoSection: React.FC<CryptoSectionProps> = ({ data, setData, usd
             positions: [...(prev.positions || []), pos]
         }));
 
-        setNewPos({ ...newPos, symbol: '', margin: '', units: '', entryPrice: '', currentPrice: '' });
+        setNewPos({ ...newPos, symbol: '', margin: '', units: '', entryPrice: '', currentPrice: '', liquidationPrice: '' });
     };
 
     // --- Edit Logic ---
@@ -389,6 +412,19 @@ export const CryptoSection: React.FC<CryptoSectionProps> = ({ data, setData, usd
                         />
                     </div>
 
+                    {/* 強平價輸入 (只在合約時顯示) */}
+                    {newPos.type === 'FUTURE' && (
+                        <div>
+                            <input
+                                type="number"
+                                className="w-full bg-gray-900 border border-orange-600/50 rounded px-2 py-1 text-sm text-orange-300 placeholder-orange-300/50"
+                                placeholder="強平價 (可選，Cross Margin 建議填寫)"
+                                value={newPos.liquidationPrice}
+                                onChange={e => setNewPos({ ...newPos, liquidationPrice: e.target.value })}
+                            />
+                        </div>
+                    )}
+
                     {/* Live Preview */}
                     {((newPos.margin || newPos.units) && newPos.entryPrice) && (
                         <div className="flex justify-between text-[10px] px-1 bg-gray-900/50 p-1 rounded">
@@ -495,9 +531,26 @@ export const CryptoSection: React.FC<CryptoSectionProps> = ({ data, setData, usd
                                         <span>本: {p.margin} | {p.entryPrice} → {p.currentPrice}</span>
                                     )}
 
-                                    <span className={`${p.pnlPercent >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                        {p.pnlPercent.toFixed(2)}%
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        {/* 爆倉距離 (僅合約顯示) */}
+                                        {p.type === 'FUTURE' && (() => {
+                                            const liqDist = calculateLiqDistance(p);
+                                            if (liqDist === null) return null;
+                                            const isEstimate = !p.liquidationPrice || p.liquidationPrice <= 0;
+                                            const isDanger = liqDist < 10;
+                                            return (
+                                                <span
+                                                    className={`font-mono ${isDanger ? 'text-red-500 font-bold animate-pulse' : 'text-orange-400'}`}
+                                                    title={isEstimate ? '預估強平距離 (建議輸入實際強平價)' : '基於輸入的強平價計算'}
+                                                >
+                                                    {liqDist > 0 ? '-' : ''}{Math.abs(liqDist).toFixed(1)}% Liq{isEstimate ? '*' : ''}
+                                                </span>
+                                            );
+                                        })()}
+                                        <span className={`${p.pnlPercent >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                            {p.pnlPercent.toFixed(2)}%
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <div className="absolute right-1 top-1 hidden group-hover:flex gap-1 bg-gray-800 shadow-md rounded p-1">

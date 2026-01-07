@@ -40,6 +40,25 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
     }
   };
 
+  // 計算融資風險指標 (維持率 & 斷頭距離)
+  const calculateMarginRisk = (stock: StockPosition): { maintenanceRate: number; distanceToKill: number } | null => {
+    if (!stock.isMargin || stock.loanAmount <= 0) return null;
+
+    const marketValue = stock.price * stock.shares;
+    const loanAmount = stock.loanAmount;
+
+    // 維持率 = 現值 / 融資金額 × 100%
+    const maintenanceRate = (marketValue / loanAmount) * 100;
+
+    // 斷頭價 = 融資金額 × 130% / 股數
+    const killPrice = (loanAmount * 1.30) / stock.shares;
+
+    // 距離斷頭 % = (現價 - 斷頭價) / 現價 × 100%
+    const distanceToKill = ((stock.price - killPrice) / stock.price) * 100;
+
+    return { maintenanceRate, distanceToKill };
+  };
+
   const handleAddStock = () => {
     if (!newStock.name || !newStock.price || !newStock.shares) return;
 
@@ -353,6 +372,17 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
                     <span className="mx-1">→</span>
                     現價: <span className="text-gray-200">{stock.price}</span>
                   </div>
+                  {/* 融資風險指標 */}
+                  {(() => {
+                    const risk = calculateMarginRisk(stock);
+                    if (!risk) return null;
+                    const isDanger = risk.maintenanceRate < 140 || risk.distanceToKill < 10;
+                    return (
+                      <div className={`text-[10px] mt-1 font-mono ${isDanger ? 'text-red-500 font-bold' : 'text-orange-400'}`}>
+                        維持率: {risk.maintenanceRate.toFixed(0)}% | 距斷頭: {risk.distanceToKill > 0 ? '-' : ''}{Math.abs(risk.distanceToKill).toFixed(1)}%
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="text-right flex items-center gap-3">
                   <div className="flex flex-col items-end">
