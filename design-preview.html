@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>天機·火控雷達 v3.0 - 設計預覽</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@400;500;600;700;800&display=swap">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .font-cyber { font-family: 'Orbitron', sans-serif; }
+        
+        /* 漸層背景 */
+        .bg-cyber-gradient {
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+        }
+        
+        /* 玻璃擬態效果 */
+        .glass-card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* 光暈效果 */
+        .glow-emerald { box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+        .glow-cyan { box-shadow: 0 0 20px rgba(6, 182, 212, 0.3); }
+        .glow-purple { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3); }
+        .glow-pink { box-shadow: 0 0 20px rgba(236, 72, 153, 0.3); }
+        
+        /* 漸層文字 */
+        .text-gradient-gold {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .text-gradient-cyan {
+            background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 50%, #0891b2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .text-gradient-emerald {
+            background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* 動態數字動畫 */
+        @keyframes countUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-count { animation: countUp 0.6s ease-out forwards; }
+        
+        /* 脈動光暈 */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(16, 185, 129, 0.5); }
+        }
+        .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+        
+        /* 進度條動畫 */
+        @keyframes progress-fill {
+            from { width: 0%; }
+        }
+        .animate-progress { animation: progress-fill 1.5s ease-out forwards; }
+        
+        /* 懸浮效果 */
+        .hover-lift {
+            transition: all 0.3s ease;
+        }
+        .hover-lift:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        /* 數據閃爍 */
+        @keyframes blink {
+            0%, 50%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.5; }
+        }
+        .blink { animation: blink 1s ease-in-out; }
+        
+        /* 圓環進度 */
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+        
+        /* 自定義滾動條 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { 
+            background: linear-gradient(180deg, #06b6d4 0%, #8b5cf6 100%); 
+            border-radius: 3px; 
+        }
+    </style>
+</head>
+<body class="bg-cyber-gradient min-h-screen text-white overflow-x-hidden">
+    
+    <!-- 頂部導航 -->
+    <header class="sticky top-0 z-50 glass-card border-b border-gray-700/50">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center text-white font-cyber font-bold text-lg pulse-glow">
+                    天
+                </div>
+                <div>
+                    <h1 class="font-cyber text-lg font-bold text-gradient-cyan">天機·火控雷達</h1>
+                    <p class="text-xs text-gray-400">v3.0 • 賽博養生村</p>
+                </div>
+            </div>
+            
+            <nav class="flex items-center gap-2">
+                <button class="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-medium text-sm hover:opacity-90 transition">
+                    📊 儀表板
+                </button>
+                <button class="px-4 py-2 rounded-lg bg-gray-800/60 text-gray-300 font-medium text-sm hover:bg-gray-700/60 transition">
+                    📈 歷史
+                </button>
+                <button class="px-4 py-2 rounded-lg bg-gray-800/60 text-gray-300 font-medium text-sm hover:bg-gray-700/60 transition">
+                    ⚗️ 量化
+                </button>
+            </nav>
+            
+            <div class="flex items-center gap-3">
+                <button class="px-3 py-2 rounded-lg bg-emerald-600/20 text-emerald-400 text-sm font-medium border border-emerald-600/30 hover:bg-emerald-600/30 transition">
+                    🔄 刷新全部
+                </button>
+            </div>
+        </div>
+    </header>
+    
+    <main class="container mx-auto px-4 py-6 space-y-6">
+        
+        <!-- 資產總覽卡片 -->
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- 台幣圈 -->
+            <div class="glass-card rounded-2xl p-5 hover-lift glow-emerald">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-sm text-gray-400">🇹🇼 台幣圈</span>
+                    <span class="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400">90%</span>
+                </div>
+                <div class="relative h-28 flex items-center justify-center">
+                    <svg class="w-24 h-24 progress-ring" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="40" stroke="#1e293b" stroke-width="8" fill="none"/>
+                        <circle cx="50" cy="50" r="40" stroke="url(#grad-emerald)" stroke-width="8" fill="none" 
+                                stroke-dasharray="251.2" stroke-dashoffset="25" stroke-linecap="round"/>
+                        <defs>
+                            <linearGradient id="grad-emerald" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#34d399"/>
+                                <stop offset="100%" style="stop-color:#10b981"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="absolute text-center">
+                        <div class="text-2xl font-bold text-gradient-emerald font-cyber animate-count">331.2</div>
+                        <div class="text-xs text-gray-500">萬</div>
+                    </div>
+                </div>
+                <div class="space-y-2 mt-3">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-500">● 台幣現金</span>
+                        <span class="text-white font-mono">41.7萬</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-500">● 台股市值</span>
+                        <span class="text-white font-mono">289.5萬</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 美金圈 -->
+            <div class="glass-card rounded-2xl p-5 hover-lift glow-purple">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-sm text-gray-400">🇺🇸 美金圈</span>
+                    <span class="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-400">100%</span>
+                </div>
+                <div class="relative h-28 flex items-center justify-center">
+                    <svg class="w-24 h-24 progress-ring" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="40" stroke="#1e293b" stroke-width="8" fill="none"/>
+                        <circle cx="50" cy="50" r="40" stroke="url(#grad-purple)" stroke-width="8" fill="none" 
+                                stroke-dasharray="251.2" stroke-dashoffset="0" stroke-linecap="round"/>
+                        <defs>
+                            <linearGradient id="grad-purple" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#a78bfa"/>
+                                <stop offset="100%" style="stop-color:#8b5cf6"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="absolute text-center">
+                        <div class="text-2xl font-bold text-purple-400 font-cyber animate-count">25.9</div>
+                        <div class="text-xs text-gray-500">萬</div>
+                    </div>
+                </div>
+                <div class="space-y-2 mt-3">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-500">● 美股市值</span>
+                        <span class="text-white font-mono">25.9萬</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- USDT圈 -->
+            <div class="glass-card rounded-2xl p-5 hover-lift glow-pink">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-sm text-gray-400">₿ USDT圈</span>
+                    <span class="text-xs px-2 py-1 rounded-full bg-pink-500/20 text-pink-400">97%</span>
+                </div>
+                <div class="relative h-28 flex items-center justify-center">
+                    <svg class="w-24 h-24 progress-ring" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="40" stroke="#1e293b" stroke-width="8" fill="none"/>
+                        <circle cx="50" cy="50" r="40" stroke="url(#grad-pink)" stroke-width="8" fill="none" 
+                                stroke-dasharray="251.2" stroke-dashoffset="7.5" stroke-linecap="round"/>
+                        <defs>
+                            <linearGradient id="grad-pink" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#f472b6"/>
+                                <stop offset="100%" style="stop-color:#ec4899"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="absolute text-center">
+                        <div class="text-2xl font-bold text-pink-400 font-cyber animate-count">94.2</div>
+                        <div class="text-xs text-gray-500">萬</div>
+                    </div>
+                </div>
+                <div class="space-y-2 mt-3">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-500">● 幣圈市值</span>
+                        <span class="text-white font-mono">94.2萬</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 淨資產總計 -->
+            <div class="glass-card rounded-2xl p-5 hover-lift pulse-glow border-2 border-emerald-500/30">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-sm text-gray-400">💰 淨資產</span>
+                    <span class="text-xs px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-400">新高 +1.2%</span>
+                </div>
+                <div class="h-28 flex flex-col items-center justify-center">
+                    <div class="text-4xl font-bold text-gradient-gold font-cyber animate-count">451.3</div>
+                    <div class="text-sm text-gray-400 mt-1">萬</div>
+                    <div class="flex items-center gap-2 mt-2">
+                        <span class="text-emerald-400 text-sm">▲ +27.9萬</span>
+                        <span class="text-gray-500 text-xs">(+6.8%)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 資產膨脹預測 -->
+        <section class="glass-card rounded-2xl p-6 hover-lift">
+            <div class="flex items-center gap-3 mb-5">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
+                    📈
+                </div>
+                <h2 class="text-lg font-bold text-white">資產膨脹預測</h2>
+                <span class="text-xs text-gray-500 ml-auto">基於 45 天數據</span>
+            </div>
+            
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+                    <div class="text-xs text-gray-500 mb-1">區間變化</div>
+                    <div class="text-2xl font-bold text-gradient-emerald font-cyber">+27.9萬</div>
+                    <div class="text-xs text-emerald-400 mt-1">+6.8%</div>
+                </div>
+                <div class="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+                    <div class="text-xs text-gray-500 mb-1">月成長率</div>
+                    <div class="text-2xl font-bold text-emerald-400 font-cyber">+4.5%</div>
+                </div>
+                <div class="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+                    <div class="text-xs text-gray-500 mb-1">年化成長率</div>
+                    <div class="text-2xl font-bold text-gradient-cyan font-cyber">+55%</div>
+                </div>
+                <div class="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+                    <div class="text-xs text-gray-500 mb-1">日均成長</div>
+                    <div class="text-2xl font-bold text-cyan-400 font-cyber">+0.15%</div>
+                </div>
+            </div>
+            
+            <!-- 目標達成預估 -->
+            <div class="border-t border-gray-700/50 pt-5">
+                <div class="text-sm text-gray-400 mb-4 flex items-center gap-2">
+                    🎯 目標達成預估
+                </div>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 flex items-center justify-center text-xs">🏆</div>
+                            <div>
+                                <div class="text-white font-medium">500萬 初見</div>
+                                <div class="w-40 h-1.5 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full animate-progress" style="width: 90%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="text-yellow-400 text-sm font-mono">約 0 年 2 月後</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-violet-500 flex items-center justify-center text-xs">🚀</div>
+                            <div>
+                                <div class="text-white font-medium">800萬 爬升</div>
+                                <div class="w-40 h-1.5 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-purple-500 to-violet-500 rounded-full animate-progress" style="width: 56%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="text-purple-400 text-sm font-mono">約 1 年 0 月後</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 flex items-center justify-center text-xs">💎</div>
+                            <div>
+                                <div class="text-white font-medium">1000萬 夢的開始</div>
+                                <div class="w-40 h-1.5 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-pink-500 to-rose-500 rounded-full animate-progress" style="width: 45%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="text-pink-400 text-sm font-mono">約 1 年 5 月後</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 波段分析 -->
+        <section class="glass-card rounded-2xl p-6 hover-lift">
+            <div class="flex items-center gap-3 mb-5">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                    📊
+                </div>
+                <h2 class="text-lg font-bold text-white">波段分析</h2>
+            </div>
+            
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+                    <div class="text-xs text-gray-500 mb-1">目前淨值</div>
+                    <div class="text-2xl font-bold text-white font-cyber">451.3萬</div>
+                </div>
+                <div class="bg-gray-800/40 rounded-xl p-4 border border-emerald-500/30">
+                    <div class="text-xs text-gray-500 mb-1">↑ 歷史最高</div>
+                    <div class="text-2xl font-bold text-emerald-400 font-cyber">456.3萬</div>
+                    <div class="text-xs text-gray-500 mt-1">2026-01-14</div>
+                </div>
+                <div class="bg-gray-800/40 rounded-xl p-4 border border-red-500/30">
+                    <div class="text-xs text-gray-500 mb-1">↓ 歷史最低</div>
+                    <div class="text-2xl font-bold text-red-400 font-cyber">324.9萬</div>
+                    <div class="text-xs text-gray-500 mt-1">2025-12-14</div>
+                </div>
+                <div class="bg-gray-800/40 rounded-xl p-4 border border-cyan-500/30">
+                    <div class="text-xs text-gray-500 mb-1">波段位置</div>
+                    <div class="text-2xl font-bold text-gradient-cyan font-cyber">86%</div>
+                    <div class="text-xs text-gray-500 mt-1">(歷史低點→高點)</div>
+                    <div class="w-full h-2 bg-gray-700 rounded-full mt-2 overflow-hidden">
+                        <div class="h-full rounded-full animate-progress" style="width: 86%; background: linear-gradient(90deg, #ef4444 0%, #f59e0b 30%, #22c55e 100%)"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex gap-4 mt-4 text-sm">
+                <span class="text-red-400">離高點: -3.9%</span>
+                <span class="text-emerald-400">離低點: +35.0%</span>
+            </div>
+        </section>
+        
+        <!-- 設計說明 -->
+        <section class="glass-card rounded-2xl p-6 border-2 border-dashed border-cyan-500/30">
+            <h2 class="text-lg font-bold text-gradient-cyan mb-4">🎨 設計重點說明</h2>
+            <div class="grid md:grid-cols-2 gap-4 text-sm text-gray-300">
+                <div class="space-y-2">
+                    <div class="flex items-start gap-2">
+                        <span class="text-cyan-400">✦</span>
+                        <span><strong>玻璃擬態 (Glassmorphism)</strong>：半透明卡片 + 模糊背景，更有層次感</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <span class="text-cyan-400">✦</span>
+                        <span><strong>漸層色彩</strong>：取代純色，讓視覺更豐富不單調</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <span class="text-cyan-400">✦</span>
+                        <span><strong>光暈效果</strong>：重要卡片有柔和的發光邊框</span>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex items-start gap-2">
+                        <span class="text-pink-400">✦</span>
+                        <span><strong>微動畫</strong>：進度條填充、數字漸入、懸浮上升</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <span class="text-pink-400">✦</span>
+                        <span><strong>Orbitron 字體</strong>：數字使用科幻風字體</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <span class="text-pink-400">✦</span>
+                        <span><strong>圓環進度圖</strong>：取代傳統圓餅圖，更現代</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+    </main>
+    
+    <footer class="text-center py-6 text-gray-500 text-sm">
+        這是設計預覽，功能會完整保留，只改變視覺呈現
+    </footer>
+    
+</body>
+</html>

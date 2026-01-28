@@ -710,43 +710,46 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-200 font-sans selection:bg-cyan-500 selection:text-white pb-20">
+    <div className="min-h-screen text-gray-200 font-sans selection:bg-cyan-500 selection:text-white pb-20">
 
-      {/* Navbar */}
-      <nav className="bg-gray-900 border-b border-gray-800 sticky top-0 z-50 backdrop-blur-md bg-opacity-80 shadow-lg shadow-cyan-900/10">
+      {/* Navbar - 玻璃擬態風格 */}
+      <nav className="glass-card border-b border-gray-700/50 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow shadow-cyan-500/50">天</div>
-            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-emerald-400">
-              天機·火控雷達 v2.5
-            </h1>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center text-white font-bold text-lg shadow-lg logo-glow font-cyber">天</div>
+            <div>
+              <h1 className="text-xl font-bold text-gradient-cyan font-cyber">
+                天機·火控雷達 v3.0
+              </h1>
+              <p className="text-xs text-gray-500">賽博養生村</p>
+            </div>
           </div>
 
-          {/* Tab 切換 */}
-          <div className="flex items-center gap-2 bg-gray-800 rounded-full p-1">
+          {/* Tab 切換 - 膠囊按鈕 */}
+          <div className="flex items-center gap-1 glass-card-dark rounded-full p-1">
             <button
               onClick={() => setCurrentTab('dashboard')}
-              className={`px-3 py-1 rounded-full text-sm transition-colors ${currentTab === 'dashboard'
-                ? 'bg-cyan-600 text-white'
-                : 'text-gray-400 hover:text-white'
+              className={`px-4 py-1.5 rounded-full text-sm transition-all btn-press ${currentTab === 'dashboard'
+                ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-lg'
+                : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                 }`}
             >
               📊 儀表板
             </button>
             <button
               onClick={() => setCurrentTab('history')}
-              className={`px-3 py-1 rounded-full text-sm transition-colors ${currentTab === 'history'
-                ? 'bg-purple-600 text-white'
-                : 'text-gray-400 hover:text-white'
+              className={`px-4 py-1.5 rounded-full text-sm transition-all btn-press ${currentTab === 'history'
+                ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-lg'
+                : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                 }`}
             >
               📈 歷史
             </button>
             <button
               onClick={() => setCurrentTab('quant')}
-              className={`px-3 py-1 rounded-full text-sm transition-colors ${currentTab === 'quant'
-                ? 'bg-emerald-600 text-white'
-                : 'text-gray-400 hover:text-white'
+              className={`px-4 py-1.5 rounded-full text-sm transition-all btn-press ${currentTab === 'quant'
+                ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg'
+                : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                 }`}
             >
               🔬 量化
@@ -757,7 +760,7 @@ const App: React.FC = () => {
             {/* 手動快照按鈕 */}
             <button
               onClick={createSnapshot}
-              className="flex items-center gap-1 bg-gray-800 px-3 py-1 rounded-full border border-gray-700 text-gray-400 hover:text-emerald-400 hover:border-emerald-600 transition-colors"
+              className="flex items-center gap-1 glass-card-dark px-3 py-1.5 rounded-full border border-gray-700/50 text-gray-400 hover:text-emerald-400 hover:border-emerald-500/50 hover:glow-emerald transition-all btn-press"
               title="手動快照"
             >
               <Camera size={14} /> 快照
@@ -767,7 +770,7 @@ const App: React.FC = () => {
             <button
               onClick={handleGlobalRefresh}
               disabled={isGlobalRefreshing}
-              className="flex items-center gap-1 bg-gradient-to-r from-cyan-700 to-emerald-700 hover:from-cyan-600 hover:to-emerald-600 disabled:from-gray-700 disabled:to-gray-700 text-white px-3 py-1 rounded-full transition-colors"
+              className="flex items-center gap-1 bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 disabled:from-gray-700 disabled:to-gray-700 text-white px-4 py-1.5 rounded-full transition-all shadow-lg hover:shadow-cyan-500/25 btn-press"
               title="刷新所有數據 + 快照"
             >
               <RefreshCw size={14} className={isGlobalRefreshing ? 'animate-spin' : ''} />
@@ -775,22 +778,22 @@ const App: React.FC = () => {
             </button>
 
             {/* 雲端同步按鈕組 */}
-            <div className="flex items-center gap-1 bg-gray-800 rounded-full border border-gray-700">
+            <div className="flex items-center gap-0 glass-card-dark rounded-full border border-gray-700/50">
               <button
                 onClick={handleCloudUpload}
                 disabled={isCloudSyncing}
-                className={`flex items-center gap-1 px-2 py-1 rounded-l-full transition-colors ${cloudStatus === 'synced' ? 'text-emerald-400' : cloudStatus === 'error' ? 'text-red-400' : 'text-gray-400'
-                  } hover:text-white disabled:opacity-50`}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-l-full transition-all ${cloudStatus === 'synced' ? 'text-emerald-400' : cloudStatus === 'error' ? 'text-red-400' : 'text-gray-400'
+                  } hover:text-white hover:bg-gray-700/50 disabled:opacity-50`}
                 title="上傳到雲端"
               >
                 <Cloud size={14} className={isCloudSyncing ? 'animate-pulse' : ''} />
                 {isCloudSyncing ? '' : '↑'}
               </button>
-              <div className="w-px h-4 bg-gray-600" />
+              <div className="w-px h-4 bg-gray-600/50" />
               <button
                 onClick={handleCloudDownload}
                 disabled={isCloudSyncing}
-                className="flex items-center gap-1 px-2 py-1 rounded-r-full text-gray-400 hover:text-white disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-r-full text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-50 transition-all"
                 title="從雲端下載"
               >
                 <CloudOff size={14} className={isCloudSyncing ? 'animate-pulse' : ''} />

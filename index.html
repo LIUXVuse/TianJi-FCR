@@ -1,26 +1,31 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>天機·火控雷達 | 賽博養生村</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-       /* Custom Scrollbar for Cyberpunk feel */
-       .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #1f2937; 
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #4b5563; 
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #06b6d4; 
-        }
-    </style>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>天機·火控雷達 | 賽博養生村</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/index.css">
+  <style>
+    /* Custom Scrollbar for Cyberpunk feel */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #1f2937;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #4b5563;
+      border-radius: 4px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #06b6d4;
+    }
+  </style>
   <script type="importmap">
 {
   "imports": {
@@ -32,10 +37,11 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-gray-950">
-    <div id="root"></div>
+
+<body class="bg-cyber-gradient min-h-screen">
+  <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>
+
 </html>

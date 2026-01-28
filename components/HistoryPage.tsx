@@ -104,6 +104,13 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
 
+    // 資產膨脹預測區間選擇器
+    const [growthRangeValue, setGrowthRangeValue] = useState<number>(0); // 0 = 全部
+    const [growthRangeUnit, setGrowthRangeUnit] = useState<'day' | 'month' | 'year'>('day');
+
+    // 預測曲線顯示開關
+    const [showPredictionLine, setShowPredictionLine] = useState(true);
+
     // 標記已載入
     useEffect(() => {
         setIsLoadedGoalLines(true);
@@ -129,12 +136,28 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
         setWaveAnalysis(getWaveAnalysis());
     }, [lastUpdated]); // 監聽 lastUpdated 變化
 
-    // 初始化目標線開關
+    // 智慧初始化目標線開關 - 只開啟「下一個未達成的目標」
     useEffect(() => {
+        if (goals.length === 0) return;
+
+        // 依金額排序目標
+        const sortedGoals = [...goals].sort((a, b) => a.targetAmount - b.targetAmount);
+
+        // 找出下一個未達成的目標
+        const nextGoal = sortedGoals.find(g => g.targetAmount > currentNetWorth);
+
         const initial: Record<string, boolean> = {};
-        goals.forEach(g => { initial[g.id] = true; });
+        goals.forEach(g => {
+            // 只開啟下一個未達成的目標，或如果全部都達成了就開最高的
+            if (nextGoal) {
+                initial[g.id] = g.id === nextGoal.id;
+            } else {
+                // 全部達成，開啟最高的那個
+                initial[g.id] = g.id === sortedGoals[sortedGoals.length - 1].id;
+            }
+        });
         setShowGoalLines(initial);
-    }, [goals]);
+    }, [goals, currentNetWorth]);
 
     // 根據時間區間過濾快照
     const filteredSnapshots = useMemo(() => {
@@ -189,11 +212,53 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
     }, [snapshots, timeRange, customStart, customEnd]);
 
     // 格式化圖表資料
-    const chartData = filteredSnapshots.map(s => ({
-        date: s.id.slice(5), // MM-DD
-        netWorth: Math.round(s.netWorth / 10000), // 萬
-        fullDate: s.id
-    }));
+    const chartData = useMemo(() => {
+        const baseData = filteredSnapshots.map(s => ({
+            date: s.id.slice(5), // MM-DD
+            netWorth: Math.round(s.netWorth / 10000), // 萬
+            fullDate: s.id,
+            prediction: null as number | null
+        }));
+
+        // 如果要顯示預測曲線且有足夠資料
+        if (showPredictionLine && baseData.length >= 2) {
+            // 直接計算成長率（從資料本身，不依賴 growthAnalysis）
+            const first = filteredSnapshots[0];
+            const last = filteredSnapshots[filteredSnapshots.length - 1];
+
+            const firstTime = first.timestamp || Date.now();
+            const lastTime = last.timestamp || Date.now();
+            const days = Math.max(1, Math.ceil((lastTime - firstTime) / (1000 * 60 * 60 * 24)));
+
+            const changePercent = ((last.netWorth - first.netWorth) / first.netWorth) * 100;
+            const dailyRate = changePercent / days / 100;
+
+            const lastActualValue = baseData[baseData.length - 1].netWorth;
+
+            // 計算要預測的天數（基於資料範圍的 50%）
+            const predictionDays = Math.max(7, Math.floor(baseData.length * 0.5));
+
+            // 為最後一個實際資料點加上預測值（作為連接點）
+            baseData[baseData.length - 1].prediction = lastActualValue;
+
+            // 生成預測資料點
+            for (let i = 1; i <= predictionDays; i++) {
+                const predictedValue = lastActualValue * Math.pow(1 + dailyRate, i);
+                const futureDate = new Date();
+                futureDate.setDate(futureDate.getDate() + i);
+                const dateStr = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
+
+                baseData.push({
+                    date: dateStr,
+                    netWorth: null as any, // 實際資料為 null
+                    fullDate: `預測-${i}`,
+                    prediction: Math.round(predictedValue)
+                });
+            }
+        }
+
+        return baseData;
+    }, [filteredSnapshots, showPredictionLine]);
 
     // 輔助函式：解析快照 ID 為 timestamp
     // ID 格式: YYYY-MM-DD-HH:mm:ss 或純日期 YYYY-MM-DD
@@ -216,12 +281,42 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
         return Date.now(); // fallback
     };
 
+    // 資產膨脹預測專用快照過濾
+    const growthFilteredSnapshots = useMemo(() => {
+        if (snapshots.length === 0) return [];
+
+        // 如果 growthRangeValue 為 0，使用全部快照
+        if (growthRangeValue === 0) return snapshots;
+
+        const now = Date.now();
+        let cutoffMs = 0;
+
+        switch (growthRangeUnit) {
+            case 'day':
+                cutoffMs = growthRangeValue * 24 * 60 * 60 * 1000;
+                break;
+            case 'month':
+                cutoffMs = growthRangeValue * 30 * 24 * 60 * 60 * 1000;
+                break;
+            case 'year':
+                cutoffMs = growthRangeValue * 365 * 24 * 60 * 60 * 1000;
+                break;
+        }
+
+        const cutoffTime = now - cutoffMs;
+
+        return snapshots.filter(s => {
+            const time = parseSnapshotTime(s);
+            return time >= cutoffTime;
+        });
+    }, [snapshots, growthRangeValue, growthRangeUnit]);
+
     // 資產膨脹預測
     const growthAnalysis = useMemo(() => {
-        if (filteredSnapshots.length < 2) return null;
+        if (growthFilteredSnapshots.length < 2) return null;
 
-        const first = filteredSnapshots[0];
-        const last = filteredSnapshots[filteredSnapshots.length - 1];
+        const first = growthFilteredSnapshots[0];
+        const last = growthFilteredSnapshots[growthFilteredSnapshots.length - 1];
 
         const firstTime = parseSnapshotTime(first);
         const lastTime = parseSnapshotTime(last);
@@ -259,9 +354,11 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
             firstNetWorth: first.netWorth,
             lastNetWorth: last.netWorth,
             firstDate: first.id.slice(0, 10),
-            lastDate: last.id.slice(0, 10)
+            lastDate: last.id.slice(0, 10),
+            // 區間設定 (供 UI 同步用)
+            snapshotCount: growthFilteredSnapshots.length
         };
-    }, [filteredSnapshots, goals, currentNetWorth]);
+    }, [growthFilteredSnapshots, goals, currentNetWorth]);
 
     // 資產配置餅圖資料
     const pieData = useMemo(() => {
@@ -408,24 +505,35 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                     <span className="text-sm text-gray-500">{filteredSnapshots.length} 筆</span>
                 </div>
 
-                {/* 目標線開關 */}
-                {goals.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-3">
-                        {goals.map(goal => (
-                            <button
-                                key={goal.id}
-                                onClick={() => toggleGoalLine(goal.id)}
-                                className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${showGoalLines[goal.id]
-                                    ? 'bg-yellow-600/30 text-yellow-400 border border-yellow-600'
-                                    : 'bg-gray-800 text-gray-500 border border-gray-700'
-                                    }`}
-                            >
-                                {showGoalLines[goal.id] ? <Eye size={12} /> : <EyeOff size={12} />}
-                                {goal.name}
-                            </button>
-                        ))}
-                    </div>
-                )}
+                {/* 目標線開關 + 預測曲線開關 */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                    {/* 預測曲線開關 */}
+                    <button
+                        onClick={() => setShowPredictionLine(!showPredictionLine)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${showPredictionLine
+                            ? 'bg-cyan-600/30 text-cyan-400 border border-cyan-600'
+                            : 'bg-gray-800 text-gray-500 border border-gray-700'
+                            }`}
+                    >
+                        {showPredictionLine ? <Eye size={12} /> : <EyeOff size={12} />}
+                        📈 預測趨勢
+                    </button>
+
+                    {/* 目標線開關 */}
+                    {goals.map(goal => (
+                        <button
+                            key={goal.id}
+                            onClick={() => toggleGoalLine(goal.id)}
+                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${showGoalLines[goal.id]
+                                ? 'bg-yellow-600/30 text-yellow-400 border border-yellow-600'
+                                : 'bg-gray-800 text-gray-500 border border-gray-700'
+                                }`}
+                        >
+                            {showGoalLines[goal.id] ? <Eye size={12} /> : <EyeOff size={12} />}
+                            {goal.name}
+                        </button>
+                    ))}
+                </div>
 
                 {filteredSnapshots.length > 0 ? (
                     <div className="h-64">
@@ -435,6 +543,11 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                                     <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
                                         <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                    </linearGradient>
+                                    {/* 預測曲線漸層 */}
+                                    <linearGradient id="predictionGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.2} />
+                                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
                                     </linearGradient>
                                     {/* 目標區域漸層 */}
                                     {goals.filter(g => showGoalLines[g.id]).map((goal, idx) => (
@@ -511,7 +624,21 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                                     stroke="#10b981"
                                     fill="url(#netWorthGradient)"
                                     strokeWidth={2}
+                                    connectNulls={false}
                                 />
+
+                                {/* 預測曲線 */}
+                                {showPredictionLine && (
+                                    <Area
+                                        type="monotone"
+                                        dataKey="prediction"
+                                        stroke="#06b6d4"
+                                        fill="url(#predictionGradient)"
+                                        strokeWidth={2}
+                                        strokeDasharray="5 3"
+                                        connectNulls={false}
+                                    />
+                                )}
 
                                 {/* 縮放拖曳元件 */}
                                 <Brush
@@ -804,148 +931,214 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
             )}
 
             {/* 資產膨脹預測 */}
-            {growthAnalysis && (
-                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Calculator size={20} className="text-cyan-400" />
-                        <span className="text-lg font-bold text-white">資產膨脹預測</span>
-                        <span className="text-xs text-gray-500 ml-auto">基於 {growthAnalysis.days} 天數據</span>
-                    </div>
-
-                    {/* 公式說明 */}
-                    <details className="mb-4 text-xs bg-gray-800/50 rounded-lg border border-gray-700">
-                        <summary className="cursor-pointer px-3 py-2 text-cyan-400 hover:text-cyan-300">📐 查看計算公式與原始數據</summary>
-                        <div className="px-3 pb-3 pt-1 space-y-2 text-gray-400">
-                            <div className="grid grid-cols-2 gap-2 pb-2 border-b border-gray-700">
-                                <div><span className="text-gray-500">起始日期:</span> <span className="text-white font-mono">{growthAnalysis.firstDate}</span></div>
-                                <div><span className="text-gray-500">結束日期:</span> <span className="text-white font-mono">{growthAnalysis.lastDate}</span></div>
-                                <div><span className="text-gray-500">起始淨值:</span> <span className="text-white font-mono">{(growthAnalysis.firstNetWorth / 10000).toFixed(2)}萬</span></div>
-                                <div><span className="text-gray-500">結束淨值:</span> <span className="text-white font-mono">{(growthAnalysis.lastNetWorth / 10000).toFixed(2)}萬</span></div>
+            {(growthAnalysis || snapshots.length > 0) && (
+                <div className="glass-card rounded-2xl p-6 hover-lift">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg">
+                                <Calculator size={16} className="text-white" />
                             </div>
-                            <div className="space-y-1">
-                                <div><span className="text-yellow-400">區間變化</span> = 結束淨值 - 起始淨值 = {(growthAnalysis.lastNetWorth / 10000).toFixed(2)} - {(growthAnalysis.firstNetWorth / 10000).toFixed(2)} = <span className="text-emerald-400 font-mono">{(growthAnalysis.change / 10000).toFixed(2)}萬</span></div>
-                                <div><span className="text-yellow-400">區間變化%</span> = (變化 ÷ 起始淨值) × 100 = ({(growthAnalysis.change / 10000).toFixed(2)} ÷ {(growthAnalysis.firstNetWorth / 10000).toFixed(2)}) × 100 = <span className="text-emerald-400 font-mono">{growthAnalysis.changePercent.toFixed(2)}%</span></div>
-                                <div><span className="text-yellow-400">日均成長率</span> = 區間變化% ÷ 天數 = {growthAnalysis.changePercent.toFixed(2)} ÷ {growthAnalysis.days} = <span className="text-emerald-400 font-mono">{growthAnalysis.dailyGrowthRate.toFixed(4)}%</span></div>
-                                <div><span className="text-yellow-400">月成長率</span> = 日均成長率 × 30 = {growthAnalysis.dailyGrowthRate.toFixed(4)} × 30 = <span className="text-emerald-400 font-mono">{growthAnalysis.monthlyGrowthRate.toFixed(2)}%</span></div>
-                                <div><span className="text-yellow-400">年化成長率</span> = 日均成長率 × 365 = {growthAnalysis.dailyGrowthRate.toFixed(4)} × 365 = <span className="text-emerald-400 font-mono">{growthAnalysis.annualizedRate.toFixed(2)}%</span></div>
-                            </div>
-                            <div className="pt-2 border-t border-gray-700 text-gray-500">
-                                ⚠️ 注意：這是簡單線性推算，僅供參考。實際成長會受市場波動影響。
-                            </div>
-                        </div>
-                    </details>
-
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                        <div className="bg-gray-800 rounded-lg p-3">
-                            <div className="text-xs text-gray-500">區間變化</div>
-                            <div className={`text-lg font-bold font-mono ${growthAnalysis.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {growthAnalysis.change >= 0 ? '+' : ''}{(growthAnalysis.change / 10000).toFixed(1)}萬
-                            </div>
-                            <div className="text-xs text-gray-500">
-                                {growthAnalysis.changePercent >= 0 ? '+' : ''}{growthAnalysis.changePercent.toFixed(1)}%
-                            </div>
+                            <span className="text-lg font-bold text-white font-cyber">資產膨脹預測</span>
                         </div>
 
-                        <div className="bg-gray-800 rounded-lg p-3">
-                            <div className="text-xs text-gray-500">月成長率</div>
-                            <div className={`text-lg font-bold font-mono ${growthAnalysis.monthlyGrowthRate >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {growthAnalysis.monthlyGrowthRate >= 0 ? '+' : ''}{growthAnalysis.monthlyGrowthRate.toFixed(1)}%
-                            </div>
-                        </div>
-
-                        <div className="bg-gray-800 rounded-lg p-3">
-                            <div className="text-xs text-gray-500">年化成長率</div>
-                            <div className={`text-lg font-bold font-mono ${growthAnalysis.annualizedRate >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {growthAnalysis.annualizedRate >= 0 ? '+' : ''}{growthAnalysis.annualizedRate.toFixed(0)}%
-                            </div>
-                        </div>
-
-                        <div className="bg-gray-800 rounded-lg p-3">
-                            <div className="text-xs text-gray-500">日均成長</div>
-                            <div className={`text-lg font-bold font-mono ${growthAnalysis.dailyGrowthRate >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {growthAnalysis.dailyGrowthRate >= 0 ? '+' : ''}{growthAnalysis.dailyGrowthRate.toFixed(2)}%
-                            </div>
+                        {/* 區間選擇器 */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">計算範圍:</span>
+                            <input
+                                type="number"
+                                min="0"
+                                value={growthRangeValue || ''}
+                                onChange={e => setGrowthRangeValue(parseInt(e.target.value) || 0)}
+                                placeholder="全部"
+                                className="w-16 glass-card-dark border border-gray-700/50 rounded-lg px-2 py-1 text-sm text-white outline-none focus:border-cyan-500/50 font-cyber text-center"
+                            />
+                            <select
+                                value={growthRangeUnit}
+                                onChange={e => setGrowthRangeUnit(e.target.value as 'day' | 'month' | 'year')}
+                                disabled={growthRangeValue === 0}
+                                className="glass-card-dark border border-gray-700/50 rounded-lg px-2 py-1 text-sm text-white outline-none focus:border-cyan-500/50 disabled:opacity-50"
+                            >
+                                <option value="day">日</option>
+                                <option value="month">月</option>
+                                <option value="year">年</option>
+                            </select>
+                            <span className="text-xs text-gray-500">
+                                ({growthAnalysis ? `${growthAnalysis.days} 天` : '無數據'})
+                            </span>
                         </div>
                     </div>
 
-                    {/* 目標達成預估 */}
-                    {growthAnalysis.goalProjections.length > 0 && (
-                        <div className="border-t border-gray-700 pt-4">
-                            <div className="text-sm text-gray-400 mb-2 flex items-center gap-1">
-                                <Clock size={14} /> 目標達成預估
-                            </div>
-                            <div className="space-y-2">
-                                {growthAnalysis.goalProjections.map(({ goal, daysToGoal, achieved }) => (
-                                    <div key={goal.id} className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-300">{goal.name} ({(goal.targetAmount / 10000).toFixed(0)}萬)</span>
-                                        <span className={achieved ? 'text-yellow-400' : daysToGoal === Infinity ? 'text-red-400' : 'text-cyan-400'}>
-                                            {achieved
-                                                ? '🎉 已達成'
-                                                : daysToGoal === Infinity
-                                                    ? '成長率不足'
-                                                    : `約 ${Math.floor(daysToGoal / 365)} 年 ${Math.floor((daysToGoal % 365) / 30)} 月後`
-                                            }
-                                        </span>
+                    {!growthAnalysis && (
+                        <div className="text-center text-gray-500 py-8">
+                            選定區間內數據不足（需至少 2 筆快照）
+                        </div>
+                    )}
+
+                    {growthAnalysis && (
+                        <>
+
+                            {/* 公式說明 */}
+                            <details className="mb-4 text-xs glass-card-dark rounded-lg border border-gray-700/50">
+                                <summary className="cursor-pointer px-3 py-2 text-cyan-400 hover:text-cyan-300">📐 查看計算公式與原始數據</summary>
+                                <div className="px-3 pb-3 pt-1 space-y-2 text-gray-400">
+                                    <div className="grid grid-cols-2 gap-2 pb-2 border-b border-gray-700">
+                                        <div><span className="text-gray-500">起始日期:</span> <span className="text-white font-mono">{growthAnalysis.firstDate}</span></div>
+                                        <div><span className="text-gray-500">結束日期:</span> <span className="text-white font-mono">{growthAnalysis.lastDate}</span></div>
+                                        <div><span className="text-gray-500">起始淨值:</span> <span className="text-white font-mono">{(growthAnalysis.firstNetWorth / 10000).toFixed(2)}萬</span></div>
+                                        <div><span className="text-gray-500">結束淨值:</span> <span className="text-white font-mono">{(growthAnalysis.lastNetWorth / 10000).toFixed(2)}萬</span></div>
                                     </div>
-                                ))}
+                                    <div className="space-y-1">
+                                        <div><span className="text-yellow-400">區間變化</span> = 結束淨值 - 起始淨值 = {(growthAnalysis.lastNetWorth / 10000).toFixed(2)} - {(growthAnalysis.firstNetWorth / 10000).toFixed(2)} = <span className="text-emerald-400 font-mono">{(growthAnalysis.change / 10000).toFixed(2)}萬</span></div>
+                                        <div><span className="text-yellow-400">區間變化%</span> = (變化 ÷ 起始淨值) × 100 = ({(growthAnalysis.change / 10000).toFixed(2)} ÷ {(growthAnalysis.firstNetWorth / 10000).toFixed(2)}) × 100 = <span className="text-emerald-400 font-mono">{growthAnalysis.changePercent.toFixed(2)}%</span></div>
+                                        <div><span className="text-yellow-400">日均成長率</span> = 區間變化% ÷ 天數 = {growthAnalysis.changePercent.toFixed(2)} ÷ {growthAnalysis.days} = <span className="text-emerald-400 font-mono">{growthAnalysis.dailyGrowthRate.toFixed(4)}%</span></div>
+                                        <div><span className="text-yellow-400">月成長率</span> = 日均成長率 × 30 = {growthAnalysis.dailyGrowthRate.toFixed(4)} × 30 = <span className="text-emerald-400 font-mono">{growthAnalysis.monthlyGrowthRate.toFixed(2)}%</span></div>
+                                        <div><span className="text-yellow-400">年化成長率</span> = 日均成長率 × 365 = {growthAnalysis.dailyGrowthRate.toFixed(4)} × 365 = <span className="text-emerald-400 font-mono">{growthAnalysis.annualizedRate.toFixed(2)}%</span></div>
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-700 text-gray-500">
+                                        ⚠️ 注意：這是簡單線性推算，僅供參考。實際成長會受市場波動影響。
+                                    </div>
+                                </div>
+                            </details>
+
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                <div className="glass-card-dark rounded-xl p-4 border border-gray-700/50 hover-lift">
+                                    <div className="text-xs text-gray-500 mb-1">區間變化</div>
+                                    <div className={`text-2xl font-bold font-cyber animate-count ${growthAnalysis.change >= 0 ? 'text-gradient-emerald' : 'text-red-400'}`}>
+                                        {growthAnalysis.change >= 0 ? '+' : ''}{(growthAnalysis.change / 10000).toFixed(1)}萬
+                                    </div>
+                                    <div className="text-xs text-emerald-400 mt-1">
+                                        {growthAnalysis.changePercent >= 0 ? '+' : ''}{growthAnalysis.changePercent.toFixed(1)}%
+                                    </div>
+                                </div>
+
+                                <div className="glass-card-dark rounded-xl p-4 border border-gray-700/50 hover-lift">
+                                    <div className="text-xs text-gray-500 mb-1">月成長率</div>
+                                    <div className={`text-2xl font-bold font-cyber animate-count ${growthAnalysis.monthlyGrowthRate >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {growthAnalysis.monthlyGrowthRate >= 0 ? '+' : ''}{growthAnalysis.monthlyGrowthRate.toFixed(1)}%
+                                    </div>
+                                </div>
+
+                                <div className="glass-card-dark rounded-xl p-4 border border-gray-700/50 hover-lift">
+                                    <div className="text-xs text-gray-500 mb-1">年化成長率</div>
+                                    <div className={`text-2xl font-bold font-cyber animate-count ${growthAnalysis.annualizedRate >= 0 ? 'text-gradient-cyan' : 'text-red-400'}`}>
+                                        {growthAnalysis.annualizedRate >= 0 ? '+' : ''}{growthAnalysis.annualizedRate.toFixed(0)}%
+                                    </div>
+                                </div>
+
+                                <div className="glass-card-dark rounded-xl p-4 border border-gray-700/50 hover-lift">
+                                    <div className="text-xs text-gray-500 mb-1">日均成長</div>
+                                    <div className={`text-2xl font-bold font-cyber animate-count ${growthAnalysis.dailyGrowthRate >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>
+                                        {growthAnalysis.dailyGrowthRate >= 0 ? '+' : ''}{growthAnalysis.dailyGrowthRate.toFixed(2)}%
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+
+                            {/* 目標達成預估 - 美化版 */}
+                            {growthAnalysis.goalProjections.length > 0 && (
+                                <div className="border-t border-gray-700/50 pt-5">
+                                    <div className="text-sm text-gray-400 mb-4 flex items-center gap-2">
+                                        🎯 目標達成預估
+                                    </div>
+                                    <div className="space-y-4">
+                                        {growthAnalysis.goalProjections.map(({ goal, daysToGoal, achieved }, index) => {
+                                            const progress = Math.min((currentNetWorth / goal.targetAmount) * 100, 100);
+                                            const gradients = [
+                                                'from-yellow-500 to-orange-500',
+                                                'from-purple-500 to-violet-500',
+                                                'from-pink-500 to-rose-500'
+                                            ];
+                                            const icons = ['🏆', '🚀', '💎'];
+
+                                            return (
+                                                <div key={goal.id} className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-8 h-8 rounded-full bg-gradient-to-r ${gradients[index % 3]} flex items-center justify-center text-xs shadow-lg`}>
+                                                            {icons[index % 3]}
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-white font-medium">{goal.name}</div>
+                                                            <div className="w-32 h-1.5 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                                                                <div
+                                                                    className={`h-full bg-gradient-to-r ${gradients[index % 3]} rounded-full animate-progress`}
+                                                                    style={{ width: `${progress}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`text-sm font-mono ${achieved ? 'text-yellow-400' : daysToGoal === Infinity ? 'text-red-400' : 'text-cyan-400'}`}>
+                                                        {achieved
+                                                            ? '🎉 已達成'
+                                                            : daysToGoal === Infinity
+                                                                ? '成長率不足'
+                                                                : `約 ${Math.floor(daysToGoal / 365)} 年 ${Math.floor((daysToGoal % 365) / 30)} 月後`
+                                                        }
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             )}
-
-            {/* 波段分析 */}
             {waveAnalysis && (
-                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                    <div className="flex items-center gap-2 mb-4">
-                        <BarChart3 size={20} className="text-cyan-400" />
-                        <span className="text-lg font-bold text-white">波段分析</span>
+                <div className="glass-card rounded-2xl p-6 hover-lift">
+                    <div className="flex items-center gap-3 mb-5">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg">
+                            <BarChart3 size={16} className="text-white" />
+                        </div>
+                        <span className="text-lg font-bold text-white font-cyber">波段分析</span>
                     </div>
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="bg-gray-800 rounded-lg p-3">
+                        <div className="glass-card-dark rounded-xl p-4 border border-gray-700/50 hover-lift">
                             <div className="text-xs text-gray-500 mb-1">目前淨值</div>
-                            <div className="text-xl font-bold text-white font-mono">
+                            <div className="text-2xl font-bold text-white font-cyber animate-count">
                                 {(currentNetWorth / 10000).toFixed(1)}萬
                             </div>
                         </div>
 
-                        <div className="bg-gray-800 rounded-lg p-3">
+                        <div className="glass-card-dark rounded-xl p-4 border-glow-emerald hover-lift">
                             <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
                                 <ArrowUp size={12} className="text-emerald-400" /> 歷史最高
                             </div>
-                            <div className="text-lg font-bold text-emerald-400 font-mono">
+                            <div className="text-2xl font-bold text-emerald-400 font-cyber animate-count">
                                 {(waveAnalysis.allTimeHigh / 10000).toFixed(1)}萬
                             </div>
-                            <div className="text-xs text-gray-500">{waveAnalysis.highDate}</div>
+                            <div className="text-xs text-gray-500 mt-1">{waveAnalysis.highDate}</div>
                         </div>
 
-                        <div className="bg-gray-800 rounded-lg p-3">
+                        <div className="glass-card-dark rounded-xl p-4 border border-red-500/30 hover-lift">
                             <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
                                 <ArrowDown size={12} className="text-red-400" /> 歷史最低
                             </div>
-                            <div className="text-lg font-bold text-red-400 font-mono">
+                            <div className="text-2xl font-bold text-red-400 font-cyber animate-count">
                                 {(waveAnalysis.allTimeLow / 10000).toFixed(1)}萬
                             </div>
-                            <div className="text-xs text-gray-500">{waveAnalysis.lowDate}</div>
+                            <div className="text-xs text-gray-500 mt-1">{waveAnalysis.lowDate}</div>
                         </div>
 
-                        <div className="bg-gray-800 rounded-lg p-3" title="0% = 歷史最低, 100% = 歷史最高">
+                        <div className="glass-card-dark rounded-xl p-4 border-glow-cyan hover-lift" title="0% = 歷史最低, 100% = 歷史最高">
                             <div className="text-xs text-gray-500 mb-1">波段位置 📊</div>
-                            <div className="text-lg font-bold text-cyan-400 font-mono">
+                            <div className="text-2xl font-bold text-gradient-cyan font-cyber animate-count">
                                 {waveAnalysis.currentPosition.toFixed(0)}%
                             </div>
-                            <div className="text-xs text-gray-500 mb-1">（歷史低點↔高點）</div>
-                            <div className="w-full bg-gray-700 rounded-full h-2 mt-2">
+                            <div className="text-xs text-gray-500 mb-2">（歷史低點↔高點）</div>
+                            <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
                                 <div
-                                    className="bg-gradient-to-r from-red-500 via-yellow-500 to-emerald-500 h-2 rounded-full transition-all"
-                                    style={{ width: `${waveAnalysis.currentPosition}%` }}
+                                    className="h-full rounded-full animate-progress"
+                                    style={{
+                                        width: `${waveAnalysis.currentPosition}%`,
+                                        background: 'linear-gradient(90deg, #ef4444 0%, #f59e0b 30%, #22c55e 100%)'
+                                    }}
                                 />
                             </div>
                         </div>
                     </div>
 
-                    <div className="mt-4 text-sm text-gray-400 space-x-4">
+                    <div className="mt-4 flex gap-4 text-sm">
                         <span className="text-red-400">離高點: -{waveAnalysis.distanceFromHigh.toFixed(1)}%</span>
                         <span className="text-emerald-400">離低點: +{waveAnalysis.distanceFromLow.toFixed(1)}%</span>
                     </div>
@@ -953,33 +1146,39 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
             )}
 
             {/* 目標追蹤 */}
-            <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                <div className="flex items-center gap-2 mb-4">
-                    <Target size={20} className="text-yellow-400" />
-                    <span className="text-lg font-bold text-white">目標追蹤</span>
+            <div className="glass-card rounded-2xl p-6 hover-lift">
+                <div className="flex items-center gap-3 mb-5">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center shadow-lg">
+                        <Target size={16} className="text-white" />
+                    </div>
+                    <span className="text-lg font-bold text-white font-cyber">目標追蹤</span>
                 </div>
 
                 {/* 目標列表 */}
-                <div className="space-y-3 mb-4">
+                <div className="space-y-4 mb-6">
                     {goals.map(goal => {
                         const { progress, remaining, isAchieved } = checkGoalProgress(goal, currentNetWorth);
                         return (
-                            <div key={goal.id} className="bg-gray-800 rounded-lg p-4">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-2">
+                            <div key={goal.id} className={`glass-card-dark rounded-xl p-4 ${isAchieved ? 'border-glow-yellow pulse-glow' : 'border border-gray-700/50'} hover-lift`}>
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-3">
                                         {isAchieved ? (
-                                            <Award size={16} className="text-yellow-400" />
+                                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
+                                                <Award size={14} className="text-white" />
+                                            </div>
                                         ) : (
-                                            <Target size={16} className="text-gray-400" />
+                                            <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center">
+                                                <Target size={12} className="text-gray-400" />
+                                            </div>
                                         )}
-                                        <span className={`font-bold ${isAchieved ? 'text-yellow-400' : 'text-white'}`}>
+                                        <span className={`font-bold ${isAchieved ? 'text-gradient-gold' : 'text-white'}`}>
                                             {goal.name}
                                         </span>
 
                                         {/* 顯示在圖表開關 */}
                                         <button
                                             onClick={() => toggleGoalLine(goal.id)}
-                                            className={`text-xs px-1.5 py-0.5 rounded ${showGoalLines[goal.id] ? 'bg-yellow-600/30 text-yellow-400' : 'bg-gray-700 text-gray-500'}`}
+                                            className={`text-xs px-2 py-0.5 rounded-full transition-all ${showGoalLines[goal.id] ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-gray-700 text-gray-500 border border-gray-600'}`}
                                             title="在圖表顯示"
                                         >
                                             {showGoalLines[goal.id] ? <Eye size={10} /> : <EyeOff size={10} />}
@@ -987,7 +1186,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                                     </div>
                                     <button
                                         onClick={() => handleDeleteGoal(goal.id)}
-                                        className="text-gray-500 hover:text-red-400 transition-colors"
+                                        className="text-gray-500 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-500/10"
                                     >
                                         <Trash2 size={14} />
                                     </button>
@@ -995,53 +1194,53 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
 
                                 <div className="flex items-center justify-between text-sm mb-2">
                                     <span className="text-gray-400">
-                                        目標: {(goal.targetAmount / 10000).toFixed(0)}萬
+                                        目標: <span className="font-cyber text-white">{(goal.targetAmount / 10000).toFixed(0)}萬</span>
                                     </span>
                                     <span className={isAchieved ? 'text-yellow-400' : 'text-emerald-400'}>
                                         {isAchieved ? '🎉 已達成!' : `還差 ${(remaining / 10000).toFixed(1)}萬`}
                                     </span>
                                 </div>
 
-                                <div className="w-full bg-gray-700 rounded-full h-3">
+                                <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
                                     <div
-                                        className={`h-3 rounded-full transition-all ${isAchieved
-                                            ? 'bg-gradient-to-r from-yellow-500 to-yellow-300'
-                                            : 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                                        className={`h-full rounded-full animate-progress ${isAchieved
+                                            ? 'bg-gradient-to-r from-yellow-500 to-orange-400'
+                                            : 'bg-gradient-to-r from-emerald-500 to-cyan-400'
                                             }`}
                                         style={{ width: `${progress}%` }}
                                     />
                                 </div>
-                                <div className="text-right text-xs text-gray-500 mt-1">{progress.toFixed(1)}%</div>
+                                <div className="text-right text-xs text-gray-500 mt-1 font-cyber">{progress.toFixed(1)}%</div>
                             </div>
                         );
                     })}
 
                     {goals.length === 0 && (
-                        <div className="text-center text-gray-500 py-4">
-                            尚未設定目標
+                        <div className="text-center text-gray-500 py-8 glass-card-dark rounded-xl">
+                            尚未設定目標，立即設定你的財富目標！
                         </div>
                     )}
                 </div>
 
                 {/* 新增目標表單 */}
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                     <input
                         type="text"
                         value={newGoalName}
                         onChange={e => setNewGoalName(e.target.value)}
                         placeholder="目標名稱"
-                        className="flex-1 bg-gray-700 rounded px-3 py-2 text-white outline-none focus:ring-1 ring-yellow-500"
+                        className="flex-1 glass-card-dark border border-gray-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-yellow-500/50 focus:glow-yellow transition-all"
                     />
                     <input
                         type="number"
                         value={newGoalAmount}
                         onChange={e => setNewGoalAmount(e.target.value)}
                         placeholder="金額(萬)"
-                        className="w-24 bg-gray-700 rounded px-3 py-2 text-white outline-none focus:ring-1 ring-yellow-500"
+                        className="w-28 glass-card-dark border border-gray-700/50 rounded-xl px-4 py-2.5 text-white outline-none focus:border-yellow-500/50 focus:glow-yellow transition-all font-cyber"
                     />
                     <button
                         onClick={handleAddGoal}
-                        className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded flex items-center gap-1 transition-colors"
+                        className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg hover:shadow-yellow-500/25 btn-press"
                     >
                         <Plus size={16} /> 新增
                     </button>
