@@ -195,13 +195,37 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
         fullDate: s.id
     }));
 
+    // 輔助函式：解析快照 ID 為 timestamp
+    // ID 格式: YYYY-MM-DD-HH:mm:ss 或純日期 YYYY-MM-DD
+    const parseSnapshotTime = (snapshot: DailySnapshot): number => {
+        // 優先使用 timestamp 欄位
+        if (snapshot.timestamp) return snapshot.timestamp;
+
+        const id = snapshot.id;
+        try {
+            // 格式: YYYY-MM-DD-HH:mm:ss
+            const parts = id.split('-');
+            if (parts.length >= 3) {
+                const datePart = parts.slice(0, 3).join('-'); // YYYY-MM-DD
+                const timePart = parts.length > 3 ? parts.slice(3).join(':') : '00:00:00'; // HH:mm:ss
+                return new Date(`${datePart}T${timePart}`).getTime();
+            }
+        } catch (e) {
+            console.error('Date parse error for snapshot:', id, e);
+        }
+        return Date.now(); // fallback
+    };
+
     // 資產膨脹預測
     const growthAnalysis = useMemo(() => {
         if (filteredSnapshots.length < 2) return null;
 
         const first = filteredSnapshots[0];
         const last = filteredSnapshots[filteredSnapshots.length - 1];
-        const days = Math.max(1, Math.ceil((new Date(last.id).getTime() - new Date(first.id).getTime()) / (1000 * 60 * 60 * 24)));
+
+        const firstTime = parseSnapshotTime(first);
+        const lastTime = parseSnapshotTime(last);
+        const days = Math.max(1, Math.ceil((lastTime - firstTime) / (1000 * 60 * 60 * 24)));
 
         const change = last.netWorth - first.netWorth;
         const changePercent = (change / first.netWorth) * 100;
@@ -230,7 +254,12 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
             dailyGrowthRate,
             monthlyGrowthRate,
             annualizedRate,
-            goalProjections
+            goalProjections,
+            // 公式驗證用資料
+            firstNetWorth: first.netWorth,
+            lastNetWorth: last.netWorth,
+            firstDate: first.id.slice(0, 10),
+            lastDate: last.id.slice(0, 10)
         };
     }, [filteredSnapshots, goals, currentNetWorth]);
 
@@ -782,6 +811,29 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                         <span className="text-lg font-bold text-white">資產膨脹預測</span>
                         <span className="text-xs text-gray-500 ml-auto">基於 {growthAnalysis.days} 天數據</span>
                     </div>
+
+                    {/* 公式說明 */}
+                    <details className="mb-4 text-xs bg-gray-800/50 rounded-lg border border-gray-700">
+                        <summary className="cursor-pointer px-3 py-2 text-cyan-400 hover:text-cyan-300">📐 查看計算公式與原始數據</summary>
+                        <div className="px-3 pb-3 pt-1 space-y-2 text-gray-400">
+                            <div className="grid grid-cols-2 gap-2 pb-2 border-b border-gray-700">
+                                <div><span className="text-gray-500">起始日期:</span> <span className="text-white font-mono">{growthAnalysis.firstDate}</span></div>
+                                <div><span className="text-gray-500">結束日期:</span> <span className="text-white font-mono">{growthAnalysis.lastDate}</span></div>
+                                <div><span className="text-gray-500">起始淨值:</span> <span className="text-white font-mono">{(growthAnalysis.firstNetWorth / 10000).toFixed(2)}萬</span></div>
+                                <div><span className="text-gray-500">結束淨值:</span> <span className="text-white font-mono">{(growthAnalysis.lastNetWorth / 10000).toFixed(2)}萬</span></div>
+                            </div>
+                            <div className="space-y-1">
+                                <div><span className="text-yellow-400">區間變化</span> = 結束淨值 - 起始淨值 = {(growthAnalysis.lastNetWorth / 10000).toFixed(2)} - {(growthAnalysis.firstNetWorth / 10000).toFixed(2)} = <span className="text-emerald-400 font-mono">{(growthAnalysis.change / 10000).toFixed(2)}萬</span></div>
+                                <div><span className="text-yellow-400">區間變化%</span> = (變化 ÷ 起始淨值) × 100 = ({(growthAnalysis.change / 10000).toFixed(2)} ÷ {(growthAnalysis.firstNetWorth / 10000).toFixed(2)}) × 100 = <span className="text-emerald-400 font-mono">{growthAnalysis.changePercent.toFixed(2)}%</span></div>
+                                <div><span className="text-yellow-400">日均成長率</span> = 區間變化% ÷ 天數 = {growthAnalysis.changePercent.toFixed(2)} ÷ {growthAnalysis.days} = <span className="text-emerald-400 font-mono">{growthAnalysis.dailyGrowthRate.toFixed(4)}%</span></div>
+                                <div><span className="text-yellow-400">月成長率</span> = 日均成長率 × 30 = {growthAnalysis.dailyGrowthRate.toFixed(4)} × 30 = <span className="text-emerald-400 font-mono">{growthAnalysis.monthlyGrowthRate.toFixed(2)}%</span></div>
+                                <div><span className="text-yellow-400">年化成長率</span> = 日均成長率 × 365 = {growthAnalysis.dailyGrowthRate.toFixed(4)} × 365 = <span className="text-emerald-400 font-mono">{growthAnalysis.annualizedRate.toFixed(2)}%</span></div>
+                            </div>
+                            <div className="pt-2 border-t border-gray-700 text-gray-500">
+                                ⚠️ 注意：這是簡單線性推算，僅供參考。實際成長會受市場波動影響。
+                            </div>
+                        </div>
+                    </details>
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         <div className="bg-gray-800 rounded-lg p-3">
