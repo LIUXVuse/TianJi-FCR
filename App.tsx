@@ -342,12 +342,13 @@ const App: React.FC = () => {
     // ==========================================
     // 5. Total Portfolio Math
     // ==========================================
-    // 總資產 = 台幣現金 + 美金現金(換算) + 台股淨權益 + 美股淨權益 + 幣圈淨權益
-    const grossAssets = settings.cashTwd + cashUsdTwd + stockNetEquity + usStockEquityTwd + cryptoNetEquityTwd;
+    // 總資產 = 台幣現金 + 美金現金(換算) + 台股市值 + 美股市值 + 幣圈淨權益
+    // 注意：台股/美股用「市值」（不扣融資/Margin），融資列在負債端
+    const grossAssets = settings.cashTwd + cashUsdTwd + stockMarketValue + usStockExposureTwd + cryptoNetEquityTwd;
     // 總負債 = 台股融資 + 美股Margin + 信貸等
     const totalLiabilities = stockLoan + usStockLoanTwd + totalDebtAmount;
-    // 淨值 = 總資產 - 信貸等 (融資已扣在淨權益裡)
-    const totalNetWorth = grossAssets - totalDebtAmount;
+    // 淨值 = 總資產 - 總負債 (公式一致，融資在負債端扣一次)
+    const totalNetWorth = grossAssets - totalLiabilities;
     // 總曝險 = 台股市值 + 美股市值 + 幣圈倉位
     const totalExposure = stockMarketValue + usStockExposureTwd + cryptoExposureTwd;
     // 真實槓桿 = 總曝險 / 淨值
@@ -463,9 +464,10 @@ const App: React.FC = () => {
 
             const priceData = await getStockPrice(code);
             if (priceData && priceData.price > 0) {
+              // 融資：重算借款（鎖定成本）；質押：loanAmount 固定不動
               const loanAmount = stock.isMargin
                 ? stock.costPrice * stock.shares * 0.6
-                : stock.price * stock.shares * (stock.pledgeRate / 100);
+                : stock.loanAmount;
 
               return {
                 ...stock,

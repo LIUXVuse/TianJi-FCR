@@ -15,22 +15,28 @@ import {
     CryptoState
 } from '../types';
 
-// Supabase 設定 - 從環境變數讀取
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// ── 走本機後端代寫，不直連 Supabase ──────────────────────────
+// 2026-08-28 改：Supabase 所有表已開 RLS 且無任何 policy，
+// anon key 讀會靜默回空陣列、寫直接 401 —— 雲端同步從 2026-08-01 起就整個停擺。
+// 現在前端打自己的 /api/db，由 vite.config.ts 的 proxy 在 Node 端換上 service key
+// 再轉給 Supabase。**service key 不會出現在瀏覽器的任何一支 JS 裡。**
+//
+// 用 window.location.origin 而不是寫死 localhost，這樣區網其他設備
+// （http://192.168.1.107:3000）連進來也會打到同一台機器的 proxy。
+const SUPABASE_URL = `${window.location.origin}/api/db`;
 
-// 檢查設定是否存在
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.warn('⚠️ Supabase 環境變數未設定，雲端同步功能將無法使用');
-    console.warn('請在 .env.local 中設定 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY');
-}
+// 佔位字串。真正的金鑰由 proxy 覆蓋，這裡只是讓 supabase-js 願意初始化。
+const SUPABASE_PLACEHOLDER_KEY = 'handled-by-proxy';
 
 // 建立 Supabase 客戶端
 let supabase: SupabaseClient | null = null;
 
 export const getSupabaseClient = (): SupabaseClient => {
     if (!supabase) {
-        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabase = createClient(SUPABASE_URL, SUPABASE_PLACEHOLDER_KEY, {
+            // 這個 App 是單用戶、不用 Supabase Auth，關掉才不會去打 /auth/v1
+            auth: { persistSession: false, autoRefreshToken: false },
+        });
     }
     return supabase;
 };
@@ -169,7 +175,10 @@ export const loadStockPositionsFromCloud = async (): Promise<StockPosition[]> =>
             costPrice: d.cost_price,
             isMargin: d.is_margin || false,
             pledgeRate: d.pledge_rate || 0,
-            loanAmount: d.loan_amount || 0
+            loanAmount: d.loan_amount || 0,
+            // 非融資（質押）：用 loan_amount 反推 pledgeFixedLoan
+            // 避免編輯時 pledgeFixedLoan=0 導致借款歸零
+            pledgeFixedLoan: d.is_margin ? 0 : (d.loan_amount || 0)
         }));
     } catch (e) {
         console.error('❌ 載入台股失敗:', e);

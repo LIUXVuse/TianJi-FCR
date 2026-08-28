@@ -62,12 +62,18 @@ interface StockPosition {
   /** 是否使用融資 (2.5倍槓桿邏輯) */
   isMargin: boolean;
   
-  /** 質押成數 (0-100) */
+  /** 質押成數 (0-100)，僅供顯示參考，不參與負債計算 */
   pledgeRate: number;
-  
+
+  /** 🆕 質押實際借出金額 (TWD)
+   * 手動填入，為固定值，不隨股價變動
+   * 反映現實：質押借款是固定金額的貸款，股價漲跌不改變欠款金額
+   */
+  pledgeFixedLoan: number;
+
   /** 借貸金額 (TWD)
-   * 若 isMargin=true, loanAmount = costPrice * shares * 0.6
-   * 若 isMargin=false, loanAmount = price * shares * (pledgeRate / 100)
+   * 若 isMargin=true:  loanAmount = costPrice * shares * 0.6（自動計算）
+   * 若 isMargin=false: loanAmount = pledgeFixedLoan（固定，不隨股價更新）
    */
   loanAmount: number;
 }

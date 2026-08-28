@@ -17,6 +17,7 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
     price: 0,
     shares: 0,
     pledgeRate: 0,
+    pledgeFixedLoan: 0,
     isMargin: false,
   });
 
@@ -29,14 +30,13 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
   const [priceStatus, setPriceStatus] = useState(getPriceStatus());
 
   // 計算借貸金額邏輯
-  const calculateLoan = (cost: number, price: number, shares: number, rate: number, isMargin: boolean) => {
+  const calculateLoan = (cost: number, shares: number, isMargin: boolean, pledgeFixedLoan: number) => {
     if (isMargin) {
       // 台股融資邏輯：自備 4 成，融資 6 成 (槓桿 2.5倍)
-      // 借款金額通常是鎖定在「買進成本」的 6 成
       return Math.round(cost * shares * 0.6);
     } else {
-      // 一般質押：看現價打折
-      return Math.round(price * shares * (rate / 100));
+      // 質押：借出金額固定，不隨股價變動
+      return pledgeFixedLoan;
     }
   };
 
@@ -67,8 +67,9 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
     const shares = Number(newStock.shares);
     const rate = Number(newStock.pledgeRate || 0);
     const isMargin = !!newStock.isMargin;
+    const pledgeFixedLoan = Number(newStock.pledgeFixedLoan || 0);
 
-    const loan = calculateLoan(cost, current, shares, rate, isMargin);
+    const loan = calculateLoan(cost, shares, isMargin, pledgeFixedLoan);
 
     const stock: StockPosition = {
       id: Date.now().toString(),
@@ -77,11 +78,12 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
       price: current,
       shares: shares,
       pledgeRate: rate,
+      pledgeFixedLoan: pledgeFixedLoan,
       isMargin: isMargin,
       loanAmount: loan,
     };
     setPositions([...positions, stock]);
-    setNewStock({ name: '', costPrice: 0, price: 0, shares: 0, pledgeRate: 0, isMargin: false });
+    setNewStock({ name: '', costPrice: 0, price: 0, shares: 0, pledgeRate: 0, pledgeFixedLoan: 0, isMargin: false });
   };
 
   const startEdit = (stock: StockPosition) => {
@@ -104,8 +106,9 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
         const shares = Number(editForm.shares || 0);
         const rate = Number(editForm.pledgeRate || 0);
         const isMargin = !!editForm.isMargin;
+        const pledgeFixedLoan = Number(editForm.pledgeFixedLoan || 0);
 
-        const loan = calculateLoan(cost, price, shares, rate, isMargin);
+        const loan = calculateLoan(cost, shares, isMargin, pledgeFixedLoan);
 
         return {
           ...p,
@@ -114,6 +117,7 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
           price,
           shares,
           pledgeRate: rate,
+          pledgeFixedLoan: pledgeFixedLoan,
           isMargin: isMargin,
           loanAmount: loan
         };
@@ -149,10 +153,10 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
 
           const priceData = await getStockPrice(stockCode);
           if (priceData) {
-            const newLoan = calculateLoan(
-              stock.costPrice, priceData.price, stock.shares,
-              stock.pledgeRate, stock.isMargin
-            );
+            // 融資：重算借款（成本固定）；質押：保持 loanAmount 不變
+            const newLoan = stock.isMargin
+              ? calculateLoan(stock.costPrice, stock.shares, true, 0)
+              : stock.loanAmount;
 
             return {
               ...stock,
@@ -247,16 +251,28 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
 
           {/* Conditional Pledge Input (Only if not Margin) */}
           {!newStock.isMargin && (
-            <div>
-              <label className="text-xs text-gray-400 block mb-1">質押率 % (若無則填0)</label>
-              <input
-                type="number"
-                placeholder="0"
-                max="100"
-                className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:border-cyan-500 outline-none"
-                value={newStock.pledgeRate || ''}
-                onChange={e => setNewStock({ ...newStock, pledgeRate: Number(e.target.value) })}
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">質押率 % (參考用)</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  max="100"
+                  className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:border-cyan-500 outline-none"
+                  value={newStock.pledgeRate || ''}
+                  onChange={e => setNewStock({ ...newStock, pledgeRate: Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-blue-400 block mb-1">實際借出金額 (固定)</label>
+                <input
+                  type="number"
+                  placeholder="如: 720000"
+                  className="w-full bg-gray-900 border border-blue-700 rounded px-2 py-1 text-white text-sm focus:border-blue-400 outline-none"
+                  value={newStock.pledgeFixedLoan || ''}
+                  onChange={e => setNewStock({ ...newStock, pledgeFixedLoan: Number(e.target.value) })}
+                />
+              </div>
             </div>
           )}
 
@@ -336,13 +352,22 @@ export const StockSection: React.FC<StockSectionProps> = ({ positions, setPositi
                     />
                   </div>
                   {!editForm.isMargin && (
-                    <input
-                      type="number"
-                      className="bg-gray-900 w-full px-2 py-1 rounded text-sm text-white"
-                      value={editForm.pledgeRate}
-                      onChange={e => setEditForm({ ...editForm, pledgeRate: Number(e.target.value) })}
-                      placeholder="質押%"
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        className="bg-gray-900 px-2 py-1 rounded text-sm text-white"
+                        value={editForm.pledgeRate}
+                        onChange={e => setEditForm({ ...editForm, pledgeRate: Number(e.target.value) })}
+                        placeholder="質押%"
+                      />
+                      <input
+                        type="number"
+                        className="bg-gray-900 border border-blue-700 px-2 py-1 rounded text-sm text-white"
+                        value={editForm.pledgeFixedLoan || ''}
+                        onChange={e => setEditForm({ ...editForm, pledgeFixedLoan: Number(e.target.value) })}
+                        placeholder="借出金額(固定)"
+                      />
+                    </div>
                   )}
                   <div className="flex justify-end gap-2 mt-2">
                     <button onClick={saveEdit} className="p-1 bg-green-700 rounded hover:bg-green-600"><Save size={16} /></button>

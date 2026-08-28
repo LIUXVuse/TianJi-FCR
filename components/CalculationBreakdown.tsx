@@ -11,6 +11,7 @@ interface BreakdownData {
 
     // 負債
     stockLoanTwd: number;
+    usStockLoanTwd: number;
     totalDebtTwd: number;
     totalLiabilities: number;
 
@@ -70,12 +71,12 @@ export const CalculationBreakdown: React.FC<CalculationBreakdownProps> = ({ data
                                 <span className="font-mono text-white">{formatNum(data.cashTwd)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-gray-400">台股淨權益 (市值 - 融資)</span>
-                                <span className="font-mono text-white">{formatNum(data.stockEquityTwd)}</span>
+                                <span className="text-gray-400">台股市值</span>
+                                <span className="font-mono text-white">{formatNum(data.stockExposureTwd)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-gray-400">美股淨值 (換算 TWD)</span>
-                                <span className="font-mono text-white">{formatNum(data.usStockEquityTwd)}</span>
+                                <span className="text-gray-400">美股市值 (換算 TWD)</span>
+                                <span className="font-mono text-white">{formatNum(data.usStockExposureTwd)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-400">幣圈淨值 (換算 TWD)</span>
@@ -97,6 +98,10 @@ export const CalculationBreakdown: React.FC<CalculationBreakdownProps> = ({ data
                             <div className="flex justify-between">
                                 <span className="text-gray-400">台股融資金額</span>
                                 <span className="font-mono text-white">{formatNum(data.stockLoanTwd)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-400">美股 Margin (換算 TWD)</span>
+                                <span className="font-mono text-white">{formatNum(data.usStockLoanTwd)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-400">信貸/房貸/車貸</span>

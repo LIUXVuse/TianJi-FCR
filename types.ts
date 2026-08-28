@@ -11,10 +11,11 @@ export interface StockPosition {
   // --- 融資/質押邏輯 ---
   isMargin: boolean; // 是否使用融資 (Margin Trading)
   // 如果 isMargin = true, 則 loanAmount = costPrice * shares * 0.6 (自備4成, 借6成)
-  // 如果 isMargin = false, 則看 pledgeRate (質押)
+  // 如果 isMargin = false, 則質押借款固定為 pledgeFixedLoan (手動填入，不隨股價變動)
 
-  pledgeRate: number; // 質押成數 (0-100%)
-  loanAmount: number; // 融資/質押金額 (TWD)
+  pledgeRate: number;      // 質押成數 (0-100%)，僅供顯示參考
+  pledgeFixedLoan: number; // 🆕 質押實際借出金額 (TWD)，固定值，不隨股價變動
+  loanAmount: number;      // 融資/質押金額 (TWD)，融資自動算，質押同 pledgeFixedLoan
 }
 
 // ==========================================

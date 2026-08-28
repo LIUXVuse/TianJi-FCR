@@ -311,7 +311,7 @@ tianji-fcr/
 
 1. 專案建立完成後，進入 Project Dashboard。
 2. 前往 **Project Settings** (左下角齒輪圖示) > **API**。
-3. 找到 **Project URL** 與 **anon / public Key**。
+3. 找到 **Project URL** 與 **service_role Key**。
 
 ### 步驟 3：設定環境變數
 
@@ -319,9 +319,17 @@ tianji-fcr/
 2. 填入以下內容，並替換為步驟 2 取得的數值：
 
 ```bash
-VITE_SUPABASE_URL=https://你的專案ID.supabase.co
-VITE_SUPABASE_ANON_KEY=你的_anon_key
+SUPABASE_URL=https://你的專案ID.supabase.co
+SUPABASE_SERVICE_KEY=你的_service_role_key
 ```
+
+> ⚠️ **這兩個變數刻意沒有 `VITE_` 前綴**，只有 Node 端的 `vite.config.ts` 讀得到，
+> **不會被打包進瀏覽器的 JS**。前端一律打 `/api/db`，由 Vite proxy 在後端換上金鑰再轉給 Supabase。
+>
+> **絕對不要加 `VITE_` 前綴** —— 加了等於把資料庫最高權限金鑰公開在網頁原始碼裡。
+>
+> 為什麼不用 anon key：本專案的 Supabase 資料表已開 RLS 且沒有任何 policy，
+> anon key **讀會靜默回空陣列、寫會被 401 擋掉**（2026-08-01~08-28 的雲端同步就是這樣默默停擺了四週）。
 
 ### 步驟 4：初始化資料庫
 
